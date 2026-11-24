@@ -95,7 +95,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Dashboard: live block grid (right to left, padding shown as hex), decrypted token, Encrypt-then-MAC explanation.
 - ✅ Attack 6: Classical ciphers (`swarm/attacks/classical.py`): Caesar / Vigenère (key length 2–10) / one-time pad
   on an original 809-letter text. Phase 1: one chunk per key length 1–16 (average IoC of the columns).
-  Phase 2: one chunk per column, Caesar by chi-squared. Key length rule = smallest L with IoC ≥ 90% of the best
+  Phase 2: one chunk per column, Caesar by chi-squared. Key length rule = smallest L with IoC ≥ **95%** of the best (90% failed 5/2,000 on partly repeating keys like UGUK, found by a flaky CI run; 95% + reducing the key to its shortest period: 0/10,000)
   (a fixed 0.055 threshold failed: half of a 10-letter key already scores 0.056). Checked: 300/300 lengths,
   500/500 full keys correct. Swarm runtime ≈ 50–150 ms. OTP: best IoC ≈ 0.040 → "no pattern".
   Dashboard: IoC-per-length chart (peaks at L, 2L), letter frequency chart (cipher vs recovered vs English), fix table.

@@ -417,12 +417,18 @@ function classicalState(job) {
     if (k.startsWith("col:")) cols[Number(k.slice(4))] = v;
   }
   const length = Object.values(cols)[0]?.length;
-  const key = length && Object.keys(cols).length === length ? Array.from({ length }, (_, i) => cols[i].letter).join("") : null;
+  const full = length && Object.keys(cols).length === length ? Array.from({ length }, (_, i) => cols[i].letter).join("") : null;
+  const key = full ? shortestPeriod(full) : null; // "ABAB" encrypts exactly like "AB"
   const plain = key
     ? [...job.meta.ciphertext].map((c, i) => ABC[(ABC.indexOf(c) - ABC.indexOf(key[i % key.length]) + 26) % 26]).join("")
     : null;
   const bestIoc = Math.max(0, ...Object.values(iocs));
   return { iocs, cols, length, key, plain, bestIoc };
+}
+
+function shortestPeriod(key) {
+  for (let p = 1; p <= key.length; p++) if (key.length % p === 0 && key.slice(0, p).repeat(key.length / p) === key) return key.slice(0, p);
+  return key;
 }
 
 function letterFreq(text) {
@@ -477,7 +483,7 @@ function classicalSummary(job) {
       <p class="muted">No key length made the columns look like English (best IoC ${st.bestIoc.toFixed(4)} vs 0.066).
         The "recovered" text is meaningless: with a one-time pad, every plaintext of this length is equally likely.</p>${cipherText}`;
   }
-  const real = job.secret && job.secret.key;
+  const real = job.secret && job.secret.key && shortestPeriod(job.secret.key);
   const keyHtml = [...st.key].map((c, i) => `<span class="${real && real[i] !== c ? "bad" : ""}">${c}</span>`).join("");
   return `
     <h2>🔓 ${m.cipher === "caesar" ? "Caesar" : "Vigenère"} key recovered in ${fmtDuration(job.elapsed)}, no brute force</h2>
