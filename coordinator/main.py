@@ -127,6 +127,7 @@ async def load_job(jid: str) -> dict | None:
         "phase_names": json.loads(h.get("phase_names", '["search"]')),
         "table_size": await r.hlen(K.job_table(jid)),
         "cracked": {u: json.loads(v) for u, v in (await r.hgetall(K.job_cracked(jid))).items()},
+        "live": {c: json.loads(v) for c, v in (await r.hgetall(K.job_live(jid))).items()},
     }
     if status != "running":  # only reveal the real answer after the attack ends
         secret = await r.get(K.job_secret(jid))
@@ -191,7 +192,10 @@ async def create_job(req: JobRequest):
         await r.delete(K.job_table(old))
 
     params = attack.clean_params(req.params)
-    plan = attack.plan(params)
+    try:
+        plan = await asyncio.to_thread(attack.plan, params)
+    except OSError as exc:  # e.g. the oracle container isn't running
+        raise HTTPException(503, f"could not prepare attack: {exc}") from exc
     jid = uuid.uuid4().hex[:8]
 
     pipe = r.pipeline()

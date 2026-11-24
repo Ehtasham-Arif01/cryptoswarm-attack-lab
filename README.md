@@ -46,10 +46,10 @@ docker compose down                           # stop everything
 | # | Attack | Break | Fix | Status |
 |---|---|---|---|---|
 | 1 | Brute-force DES (reduced key) | Known-plaintext key search | Bigger keys (DES-56 → AES-128) | ✅ |
-| 2 | Meet-in-the-middle | Double DES ≈ single DES | 3DES | ⬜ |
-| 3 | Birthday attack | Truncated SHA-256 collision in ~√N | Full-length hash | ⬜ |
-| 4 | Password cracking | MD5 + rainbow tables | bcrypt + salt | ⬜ |
-| 5 | Padding oracle | Decrypt AES-CBC byte by byte | Encrypt-then-MAC | ⬜ |
+| 2 | Meet-in-the-middle | Double DES ≈ single DES | 3DES | ✅ |
+| 3 | Birthday attack | Truncated SHA-256 collision in ~√N | Full-length hash | ✅ |
+| 4 | Password cracking | MD5 + rainbow tables | bcrypt + salt | ✅ |
+| 5 | Padding oracle | Decrypt AES-CBC byte by byte | Encrypt-then-MAC | ✅ |
 | 6 | Classical ciphers | Frequency analysis | Modern ciphers | ⬜ |
 
 Full roadmap and progress: **[BRAIN.md](BRAIN.md)**.

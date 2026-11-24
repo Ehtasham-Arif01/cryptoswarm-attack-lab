@@ -183,3 +183,16 @@ mark.bad { background: rgba(240, 97, 109, .25); color: var(--error); padding: 0 
 .leak .dup { color: var(--warn); font-size: 10px; display: block; font-family: system-ui, sans-serif; }
 .leak tr.new td { animation: flash 1.2s ease-out; }
 @keyframes flash { from { background: rgba(54, 211, 153, .35); } to { background: transparent; } }
+
+/* ---------- padding oracle ---------- */
+.po-grid { display: flex; flex-direction: column; gap: 6px; }
+.po-row { display: grid; grid-template-columns: 74px 1fr 22px; gap: 8px; align-items: center; font-size: 11px; }
+.po-row .bl { color: var(--muted); font-family: var(--mono); }
+.po-cells { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; }
+.po-cell { font-family: var(--mono); font-size: 13px; text-align: center; padding: 3px 0; border-radius: 3px;
+  background: var(--panel-2); color: var(--muted); }
+.po-cell.got { background: rgba(54, 211, 153, .18); color: var(--accent); font-weight: 700; }
+.po-cell.pad { background: rgba(138, 150, 173, .15); color: var(--muted); font-weight: 400; }
+.po-row.failed .po-cell { background: rgba(240, 97, 109, .12); }
+.plaintext { font-family: var(--mono); font-size: 15px; background: var(--panel-2); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 10px 14px; word-break: break-all; }

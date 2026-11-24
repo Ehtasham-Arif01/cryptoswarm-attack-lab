@@ -28,7 +28,7 @@
     <button class="tab" data-tab="mitm">2 · Meet-in-the-Middle</button>
     <button class="tab" data-tab="birthday">3 · Birthday Attack</button>
     <button class="tab" data-tab="passwords">4 · Passwords</button>
-    <button class="tab" disabled title="Week 3">5 · Padding Oracle</button>
+    <button class="tab" data-tab="padding_oracle">5 · Padding Oracle</button>
     <button class="tab" disabled title="Week 3">6 · Classical Ciphers</button>
   </nav>
 
@@ -124,6 +124,33 @@
           <button class="btn cancel">■ Cancel</button>
         </div>
       </div>
+
+      <div class="panel hidden" data-panel="padding_oracle">
+        <h2>Padding oracle: decrypting AES without the key</h2>
+        <p class="muted">
+          A web server gives users an <b>AES-128-CBC</b> encrypted session token. When a token comes back it
+          decrypts it, and on bad padding it answers <code>500 padding error</code> instead of
+          <code>400 bad session</code>. That one leaked bit is enough to decrypt the whole token.
+        </p>
+        <div class="story">
+          <div>CBC decryption: <code>P<sub>i</sub> = D(K, C<sub>i</sub>) ⊕ C<sub>i−1</sub></code></div>
+          <div><b>1.</b> Send <code>X ‖ C<sub>i</sub></code> with a chosen X instead of <code>C<sub>i−1</sub></code>.</div>
+          <div><b>2.</b> Try 256 values of the last byte of X. The one without a padding error tells us that
+            the last byte of <code>D(K, C<sub>i</sub>)</code> ⊕ X = <code>0x01</code>.</div>
+          <div><b>3.</b> Repeat for every byte, right to left. Every block is attacked in parallel by the swarm.</div>
+        </div>
+        <label class="slider">
+          <span>Server</span>
+          <select id="po-mode" data-param="mode" class="select">
+            <option value="vulnerable">Vulnerable: decrypts first, padding errors leak</option>
+            <option value="fixed">Fixed: Encrypt-then-MAC (HMAC checked first)</option>
+          </select>
+        </label>
+        <div class="buttons">
+          <button class="btn primary start" data-attack="padding_oracle" data-inputs="po-mode">▶ Start attack</button>
+          <button class="btn cancel">■ Cancel</button>
+        </div>
+      </div>
       <dl class="kv" id="job-meta"></dl>
     </section>
 
@@ -208,6 +235,16 @@
         <tbody id="pw-fix-body"></tbody>
       </table>
       <p class="muted small">Times are based on this swarm's measured speed and a per-core benchmark of each hash.</p>
+    </section>
+
+    <section class="card side panel hidden" data-panel="padding_oracle">
+      <h2>🔍 Live decryption <span class="muted small">(one row per ciphertext block, recovered right to left)</span></h2>
+      <div id="po-grid" class="po-grid"><span class="empty">Start an attack to get a session token.</span></div>
+      <h2 class="mt">🔒 Fix: Encrypt-then-MAC</h2>
+      <p class="muted small">The fixed server appends <code>HMAC-SHA256(IV ‖ C)</code> to each token and checks it
+        <b>before</b> decrypting (in constant time). Any tampered token gets the same <code>403 invalid session</code>
+        and is never decrypted, so there's no oracle. Authenticated modes such as <b>AES-GCM</b> give the same
+        protection. TLS 1.3 removed CBC for this reason (POODLE, Lucky13).</p>
     </section>
 
     <!-- ================= Events ================= -->

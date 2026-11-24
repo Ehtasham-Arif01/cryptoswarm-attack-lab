@@ -67,6 +67,11 @@ def job_cracked(jid: str) -> str:
     return f"{PREFIX}:job:{jid}:cracked"
 
 
+def job_live(jid: str) -> str:
+    """Small hash of live per-chunk details for the dashboard (padding oracle blocks)."""
+    return f"{PREFIX}:job:{jid}:live"
+
+
 def id_from_key(key: str) -> str:
     """'swarm:worker:abc' -> 'abc'."""
     return key.split(":", 2)[2]

@@ -19,6 +19,7 @@ Course: Information Security (CS3002), Stallings ch. 1–20. Team: 2 people.
 
 ```
 Dashboard (nginx + JS/Chart.js) ⇄ WebSocket/REST ⇄ Coordinator (FastAPI)
+                                         Oracle (vulnerable AES-CBC server) ⇠ workers (padding oracle only)
                                                        │
                                                      Redis  (job queue, shared tables, heartbeats, events)
                                                        │
@@ -33,7 +34,7 @@ Dashboard (nginx + JS/Chart.js) ⇄ WebSocket/REST ⇄ Coordinator (FastAPI)
 
 ## 3. Tech stack
 
-Python 3.12 (FastAPI, redis-py, pycryptodome, bcrypt) · JavaScript + Chart.js · Rust (fast worker) ·
+Python 3.12 (FastAPI, redis-py, pycryptodome, bcrypt, requests) · JavaScript + Chart.js · Rust (fast worker) ·
 Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + Trivy · SQLite (history).
 
 ## 4. Repo
@@ -84,7 +85,14 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - ✅ Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ✅ (full-hash table), passwords ✅ (salt/bcrypt/strong-password table)
 
 ### Week 3: Advanced attacks + platform features
-- ⬜ Attack 5: Padding oracle on AES-CBC (vulnerable server container) → fix with Encrypt-then-MAC
+- ✅ Attack 5: Padding oracle on AES-CBC (`swarm/attacks/padding_oracle.py` + `oracle/server.py` container).
+  Oracle = vulnerable FastAPI server (key never leaves it): `500 padding error` vs `400`/`200`. Fixed mode =
+  Encrypt-then-MAC (HMAC-SHA256 over IV‖C checked first, constant time → always `403`).
+  One chunk per ciphertext block (blocks are independent) → 6 blocks decrypted in parallel.
+  Worker calibrates with 4 random blocks; if none give a padding error, the server isn't an oracle → block "failed".
+  Live per-block progress in `swarm:job:<id>:live`. Measured (8 workers): vulnerable 6/6 blocks in 24–29 s,
+  ~11.7k queries (~122/byte); fixed: blocked after 24 queries.
+  Dashboard: live block grid (right to left, padding shown as hex), decrypted token, Encrypt-then-MAC explanation.
 - ⬜ Attack 6: Classical cipher breaker (Caesar/Vigenère frequency analysis)
 - ⬜ Fault-tolerance demo polish (dead worker tile turns red, requeue shown in event log)
 - ⬜ Cost-to-crack calculator (keys/s → AWS $ for DES vs AES)
@@ -118,6 +126,8 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 
 ## 7. Notes / gotchas
+- Padding oracle test sends ~8k requests in-process, so it only decrypts the first + last block (~35 s).
+- `attack.plan()` runs in a thread in the coordinator (padding oracle makes an HTTP call to the oracle).
 - Passwords: candidate generator has ~0.2% duplicates (l33t doesn't change words without a/e/i/o/s/t). Harmless.
 - Start buttons send the params of the inputs listed in `data-inputs` (each input has `data-param`).
 - Birthday: expected work ≈ √(πN) hashes for 2 sets; search capped at 8·√N per set. Max 38 bits (~80 MB table).

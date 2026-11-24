@@ -324,7 +324,67 @@ const ATTACK_UI = {
     result: (job) => passwordsSummary(job),
     complete: (job) => passwordsSummary(job),
   },
+  padding_oracle: {
+    triedLabel: "Oracle queries",
+    statusLabel: { exhausted: "complete" },
+    extra: (job) => ["Blocks decrypted", `${Object.values(job.live).filter((b) => b.status === "done").length} / ${job.meta.n_blocks}`],
+    meta: (m) => `
+      <dt>Server mode</dt><dd>${m.mode === "vulnerable" ? "vulnerable (padding errors leak)" : "fixed (Encrypt-then-MAC)"}</dd>
+      <dt>IV</dt><dd>0x${esc(m.blocks[0])}</dd>
+      <dt>Ciphertext</dt><dd>${m.n_blocks} blocks · 0x${esc(m.blocks.slice(1).join("").slice(0, 48))}…</dd>
+      ${m.mac ? `<dt>HMAC tag</dt><dd>0x${esc(m.mac.slice(0, 32))}…</dd>` : ""}
+      <dt>Key</dt><dd>🔑 unknown, stays inside the server</dd>`,
+    result: (job) => oracleSummary(job),
+    complete: (job) => oracleSummary(job),
+  },
 };
+
+function oracleBytes(job) {
+  const blocks = [];
+  for (let b = 0; b < job.meta.n_blocks; b++) {
+    const live = job.live[b] || { status: "waiting", plain: "" };
+    const bytes = (live.plain.match(/../g) || []).map((h) => parseInt(h, 16));
+    blocks.push({ ...live, bytes: Array(16 - bytes.length).fill(null).concat(bytes) });
+  }
+  return blocks;
+}
+
+function oracleSummary(job) {
+  const blocks = oracleBytes(job);
+  if (blocks.some((b) => b.status === "failed")) {
+    return `
+      <h2>🔒 Attack blocked after ${fmtNum(job.tried)} queries</h2>
+      <p class="muted">${esc(blocks.find((b) => b.status === "failed").note)}. With Encrypt-then-MAC the server
+        rejects every modified token <b>before</b> decrypting it, so there's nothing to learn about the padding.</p>`;
+  }
+  const all = blocks.flatMap((b) => b.bytes);
+  const pad = all[all.length - 1];
+  const text = String.fromCharCode(...all.slice(0, all.length - pad));
+  const ok = job.secret && job.secret.plaintext === text;
+  return `
+    <h2>🔓 Token decrypted in ${fmtDuration(job.elapsed)} without the key</h2>
+    <div class="plaintext">${esc(text)}</div>
+    <p class="muted">${fmtNum(job.tried)} oracle queries for ${all.length} bytes (≈ ${Math.round(job.tried / all.length)} per byte,
+      at most 256). Brute-forcing the AES-128 key instead would take ~2<sup>127</sup> tries.
+      ${ok ? "✅ Matches the server's real plaintext." : "⚠️ Does not match the server's plaintext."}</p>
+    <p class="muted small">🔒 Fix: Encrypt-then-MAC or AES-GCM. Switch the server to "Fixed" and run again.</p>`;
+}
+
+function renderOracleGrid(job) {
+  if (!job || job.attack !== "padding_oracle") return;
+  const blocks = oracleBytes(job);
+  const lastPad = blocks.every((b) => b.status === "done") ? blocks[blocks.length - 1].bytes[15] : 0;
+  $("po-grid").innerHTML = blocks.map((b, i) => {
+    const cells = b.bytes.map((v, k) => {
+      if (v === null) return '<div class="po-cell">·</div>';
+      const isPad = i === blocks.length - 1 && lastPad && k >= 16 - lastPad;
+      const ch = v >= 32 && v < 127 ? String.fromCharCode(v) : "·";
+      return `<div class="po-cell ${isPad ? "pad" : "got"}" title="0x${v.toString(16).padStart(2, "0")}">${isPad ? v.toString(16).padStart(2, "0") : esc(ch)}</div>`;
+    }).join("");
+    const icon = { done: "✅", failed: "⛔", working: "⏳", waiting: "…" }[b.status] || "";
+    return `<div class="po-row ${b.status}"><span class="bl">block ${i + 1}</span><div class="po-cells">${cells}</div><span>${icon}</span></div>`;
+  }).join("");
+}
 
 const schemeLabel = (m) => ({ md5: "MD5, no salt", md5_salted: "MD5 + per-user salt", bcrypt: `bcrypt, cost ${m.cost}` }[m.scheme]);
 
@@ -374,6 +434,7 @@ function render(s) {
   renderBirthdayFix(job);
   renderLeak(job);
   renderPwFix(job);
+  renderOracleGrid(job);
   if (activeTab === "birthday") renderBirthdayChart(job);
   renderEvents(s.events);
   if (job && job.status === "running") updateCharts(job, s);
