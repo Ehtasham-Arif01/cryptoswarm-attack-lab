@@ -68,6 +68,9 @@ function updateSliders() {
   $("mitm-naive-bits").textContent = 2 * m;
   $("mitm-naive").textContent = fmtNum(2 ** (2 * m));
   $("mitm-ops").textContent = fmtNum(2 ** (m + 1));
+  const b = Number($("bd-bits").value);
+  $("bd-space").textContent = fmtNum(2 ** b);
+  $("bd-expected").textContent = fmtNum(Math.sqrt(Math.PI * 2 ** b));
   if (lastState) render(lastState);
 }
 document.querySelectorAll("input[type=range]").forEach((s) => s.addEventListener("input", updateSliders));
@@ -115,6 +118,61 @@ const raceChart = new Chart($("race-chart"), {
     },
   },
 });
+
+const bdProb = (k, N) => 1 - Math.exp(-(k * k) / (4 * N));
+const bdChart = new Chart($("bd-chart"), {
+  type: "scatter",
+  data: {
+    datasets: [
+      { label: "Theory", data: [], showLine: true, borderColor: "#4f8cff", pointRadius: 0, borderWidth: 2 },
+      { label: "Swarm", data: [], borderColor: "#36d399", backgroundColor: "#36d399", pointRadius: 7, pointStyle: "circle" },
+      { label: "Expected ≈ √(πN)", data: [], showLine: true, borderColor: "#f5b041", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
+    ],
+  },
+  options: {
+    animation: false, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: "#e6ebf5", boxWidth: 12 } },
+      tooltip: { callbacks: { label: (c) => `${fmtNum(c.parsed.x)} hashes → ${(100 * c.parsed.y).toFixed(1)}%` } },
+    },
+    scales: {
+      x: { ...axis, type: "linear", min: 0, title: { display: true, text: "hashes computed", color: "#8a96ad" }, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } },
+      y: { ...axis, min: 0, max: 1, ticks: { ...axis.ticks, callback: (v) => Math.round(v * 100) + "%" } },
+    },
+  },
+});
+
+function renderBirthdayChart(job) {
+  const bits = job && job.attack === "birthday" ? job.meta.bits : Number($("bd-bits").value);
+  const N = 2 ** bits;
+  const xmax = Math.max(4 * Math.sqrt(N), job && job.attack === "birthday" ? job.tried * 1.1 : 0);
+  const theory = [];
+  for (let i = 0; i <= 60; i++) theory.push({ x: (xmax * i) / 60, y: bdProb((xmax * i) / 60, N) });
+  const exp = Math.sqrt(Math.PI * N);
+  bdChart.data.datasets[0].data = theory;
+  bdChart.data.datasets[2].data = [{ x: exp, y: 0 }, { x: exp, y: 1 }];
+  bdChart.data.datasets[1].data = job && job.attack === "birthday" ? [{ x: job.tried, y: bdProb(job.tried, N) }] : [];
+  bdChart.data.datasets[1].pointStyle = job && job.status === "found" ? "star" : "circle";
+  bdChart.data.datasets[1].pointRadius = job && job.status === "found" ? 12 : 7;
+  bdChart.options.scales.x.max = xmax;
+  bdChart.update();
+}
+
+function renderBirthdayFix(job) {
+  const rate = lastRate || NaN;
+  const bits = job && job.attack === "birthday" ? job.meta.bits : Number($("bd-bits").value);
+  const rows = [
+    { name: "This demo (truncated)", bits, broken: true },
+    { name: "MD5", bits: 128 },
+    { name: "SHA-1", bits: 160 },
+    { name: "SHA-256 (full)", bits: 256, fix: true },
+  ];
+  $("bd-fix-body").innerHTML = rows.map((r) => `<tr class="${r.broken ? "broken" : r.fix ? "fixed" : ""}">
+      <td>${esc(r.name)}${r.broken ? " ⚠️" : r.fix ? " ✅" : ""}</td><td>${r.bits}</td><td>2^${r.bits / 2}</td>
+      ${timeCell(Math.sqrt(Math.PI * 2 ** r.bits) / rate)}</tr>`).join("");
+}
+
+const markAmount = (text, amount, cls) => esc(text).replace(esc(amount), `<mark class="${cls}">${esc(amount)}</mark>`);
 
 let chartJob = null;
 function resetCharts(jobId) {
@@ -166,6 +224,30 @@ const ATTACK_UI = {
         <p class="muted small">🔒 Fix: Triple DES. A third encryption pushes meet-in-the-middle back to 2<sup>2n</sup> work.</p>`;
     },
   },
+  birthday: {
+    triedLabel: "Hashes computed",
+    meta: (m) => `
+      <dt>Hash</dt><dd>SHA-256 truncated to ${m.bits} bits (N = ${fmtNum(2 ** m.bits)})</dd>
+      <dt>Fair contract</dt><dd>pays Bob ${esc(m.legit_amount)}, 2^24 wordings</dd>
+      <dt>Fraud contract</dt><dd>pays Bob ${esc(m.fraud_amount)}, 2^24 wordings</dd>
+      <dt>Expected work</dt><dd>≈ ${fmtNum(m.expected_hashes)} hashes (√(πN)) vs N = ${fmtNum(2 ** m.bits)}</dd>`,
+    result: (job) => {
+      const r = job.result, m = job.meta;
+      return `
+        <h2>🔓 Collision found in ${fmtDuration(job.elapsed)}: two contracts, one hash</h2>
+        <div class="contracts">
+          <div class="contract ok"><div class="label">Fair contract #${r.legit_index} (Alice signs this)</div>
+            <p>${markAmount(r.legit, m.legit_amount, "ok")}</p></div>
+          <div class="contract bad"><div class="label">Fraud contract #${r.fraud_index} (Bob shows this in court)</div>
+            <p>${markAmount(r.fraud, m.fraud_amount, "bad")}</p></div>
+        </div>
+        <p class="big">hash<sub>${m.bits}</sub> = 0x${esc(r.hash)} for both</p>
+        <p class="muted">Found by worker ${workerTag(r.worker)} after ${fmtNum(job.tried)} hashes, about
+          ${(job.tried / m.expected_hashes).toFixed(1)}× the birthday estimate and
+          <b>${fmtNum(2 ** m.bits / job.tried)}× fewer</b> than the ${fmtNum(2 ** m.bits)} a naive search would need.</p>
+        <p class="muted small">🔒 Fix: use the full 256-bit SHA-256. Its birthday bound is 2<sup>128</sup>.</p>`;
+    },
+  },
 };
 
 const workerTag = (wid) => `<b style="color:${color(wid)}">${esc(wid)}</b>`;
@@ -182,6 +264,7 @@ function render(s) {
   const job = s.job;
   smoothRate = smoothRate * 0.6 + s.swarm_rate * 0.4;
   if (job && job.status === "running" && smoothRate > 100) lastRate = smoothRate;
+  else if (!lastRate && job && job.elapsed > 0.5) lastRate = job.tried / job.elapsed; // page opened after a run
 
   $("top-workers").textContent = s.workers.length;
   $("top-rate").textContent = fmtNum(smoothRate) + "/s";
@@ -197,6 +280,8 @@ function render(s) {
   renderWorkers(s);
   renderBruteforceFix(job);
   renderMitmFix(job);
+  renderBirthdayFix(job);
+  if (activeTab === "birthday") renderBirthdayChart(job);
   renderEvents(s.events);
   if (job && job.status === "running") updateCharts(job, s);
 }
@@ -224,11 +309,16 @@ function renderJob(job) {
     ? `${job.phase + 1}/${job.phase_ends.length} · ${fmtNum(job.table_size)}`
     : `${job.chunks_done.filter(Boolean).length}/${job.nchunks}`;
 
-  $("job-meta").innerHTML = `<dt>Job</dt><dd>${esc(job.id)} · ${esc(job.title)}</dd>` + ui.meta(job.meta);
+  const otherTab = job.attack !== activeTab;
+  $("job-meta").innerHTML = otherTab
+    ? `<dt>Last job</dt><dd>${esc(job.title)} (${esc(job.status)}). Open its tab to see details, or press Start here.</dd>`
+    : `<dt>Job</dt><dd>${esc(job.id)} · ${esc(job.title)}</dd>` + ui.meta(job.meta);
 
   renderHeatmap(job);
   const el = $("result");
-  if (job.status === "found") {
+  if (otherTab) {
+    el.classList.add("hidden");
+  } else if (job.status === "found") {
     el.classList.remove("hidden");
     el.innerHTML = ui.result(job);
   } else if (job.status === "exhausted") {

@@ -152,6 +152,8 @@ class Worker:
             return f"key = 0x{result['key']}"
         if "k1" in result:
             return f"k1 = 0x{result['k1']}, k2 = 0x{result['k2']}"
+        if "hash" in result:
+            return f"hash collision 0x{result['hash']}: fair contract #{result['legit_index']} = fraud #{result['fraud_index']}"
         return ""
 
     def handle(self, raw: str) -> None:

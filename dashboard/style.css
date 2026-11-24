@@ -160,3 +160,15 @@ h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 .event-list .warn { color: var(--warn); }
 .event-list .error { color: var(--error); }
 .event-list .success { color: var(--accent); }
+
+/* ---------- birthday attack ---------- */
+.story { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 13px;
+  border-left: 3px solid var(--accent-2); padding: 4px 0 4px 12px; }
+.contracts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0; }
+.contract { border-radius: 8px; padding: 10px 14px; background: var(--panel-2); border: 1px solid var(--border); }
+.contract.ok { border-color: var(--accent); }
+.contract.bad { border-color: var(--error); }
+.contract p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; }
+mark.ok { background: rgba(54, 211, 153, .25); color: var(--accent); padding: 0 3px; border-radius: 3px; font-weight: 700; }
+mark.bad { background: rgba(240, 97, 109, .25); color: var(--error); padding: 0 3px; border-radius: 3px; font-weight: 700; }
+@media (max-width: 1100px) { .contracts { grid-template-columns: 1fr; } }

@@ -26,7 +26,7 @@
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="bruteforce">1 · Brute Force DES</button>
     <button class="tab" data-tab="mitm">2 · Meet-in-the-Middle</button>
-    <button class="tab" disabled title="Week 2">3 · Birthday Attack</button>
+    <button class="tab" data-tab="birthday">3 · Birthday Attack</button>
     <button class="tab" disabled title="Week 2">4 · Passwords</button>
     <button class="tab" disabled title="Week 3">5 · Padding Oracle</button>
     <button class="tab" disabled title="Week 3">6 · Classical Ciphers</button>
@@ -74,6 +74,28 @@
         </label>
         <div class="buttons">
           <button class="btn primary start" data-attack="mitm" data-slider="mitm-bits">▶ Start attack</button>
+          <button class="btn cancel">■ Cancel</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" data-panel="birthday">
+        <h2>Birthday attack: forging a signed contract</h2>
+        <p class="muted">
+          In a room of just <b>23 people</b>, two share a birthday with 50% probability. The same math breaks hashes:
+          an <b class="bits-out" data-for="bd-bits">34</b>-bit hash has <span id="bd-space">17.2 G</span> values, but a
+          collision is expected after only about <b id="bd-expected">146 k</b> hashes (≈ √N).
+        </p>
+        <div class="story">
+          <div><b>1.</b> Bob writes the fair contract (<code>$100</code>) and a fraud (<code>$100,000</code>) in 2<sup>24</sup> wordings each.</div>
+          <div><b>2.</b> The swarm hashes both sets until a fair and a fraud wording have the <b>same hash</b>.</div>
+          <div><b>3.</b> Alice signs the fair one. Her signature (made on the hash) also verifies on the fraud.</div>
+        </div>
+        <label class="slider">
+          <span>Hash size: <b class="bits-out" data-for="bd-bits">34</b> bits (SHA-256 truncated)</span>
+          <input id="bd-bits" type="range" min="20" max="38" value="34" />
+        </label>
+        <div class="buttons">
+          <button class="btn primary start" data-attack="birthday" data-slider="bd-bits">▶ Start attack</button>
           <button class="btn cancel">■ Cancel</button>
         </div>
       </div>
@@ -133,6 +155,20 @@
       </table>
       <p class="muted small">MITM still works against 3DES but only removes one of the three keys, so the work stays at
         2<sup>2n</sup>. Real 3DES (3 × 56-bit keys) has 112-bit security.</p>
+    </section>
+
+    <section class="card side panel hidden" data-panel="birthday">
+      <h2>📈 Birthday curve: theory vs this run</h2>
+      <p class="muted small">Probability that a fair/fraud collision exists after <i>k</i> hashes:
+        1 − e<sup>−k²/4N</sup>. The dot is the swarm.</p>
+      <div class="chart-box small-chart"><canvas id="bd-chart"></canvas></div>
+      <h2 class="mt">🔒 Fix: use the full hash</h2>
+      <table class="reality-table">
+        <thead><tr><th>Hash</th><th>Bits</th><th>Birthday work</th><th>Time for this swarm</th></tr></thead>
+        <tbody id="bd-fix-body"></tbody>
+      </table>
+      <p class="muted small">MD5 and SHA-1 were also broken by smarter (non-birthday) attacks, so real collisions exist.
+        Use SHA-256 or better for signatures.</p>
     </section>
 
     <!-- ================= Events ================= -->

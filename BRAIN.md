@@ -69,9 +69,13 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Tested: 18-bit keys, 8 workers → both keys in 12 s; 19-bit, 4 workers → 34 s. Unit tests: 3.
 - ✅ Dashboard tabs (brute force + MITM), flow diagram, naive-vs-MITM race chart (log scale), 3DES fix table
 - ⬜ Check the race chart and speed chart fill in properly during a real-time run (headless screenshots can't show this)
-- ⬜ Attack 3: Birthday attack on truncated SHA-256 + √N curve and probability chart
+- ✅ Attack 3: Birthday attack (`swarm/attacks/birthday.py`), Yuval's contract-forgery version:
+  2^24 wordings of a $100 and a $100,000 contract, SHA-256 truncated to 20–38 bits, shared Redis table with
+  atomic HSETNX ("L<i>"/"F<i>"), collision = fair and fraud wordings share a tag.
+  Tested with 8 workers: 30 bits 2.5 s, 34 bits 4.2 s, 36 bits 23 s; collision verified independently.
+  Dashboard: contracts side by side with amounts highlighted, theory curve 1−e^(−k²/4N) with the swarm's point, fix table.
 - ⬜ Attack 4: Password cracking MD5 vs bcrypt, salt vs rainbow table
-- 🚧 Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ⬜, passwords ⬜
+- 🚧 Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ✅ (full-hash table), passwords ⬜
 
 ### Week 3: Advanced attacks + platform features
 - ⬜ Attack 5: Padding oracle on AES-CBC (vulnerable server container) → fix with Encrypt-then-MAC
@@ -108,6 +112,8 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 
 ## 7. Notes / gotchas
+- Birthday: expected work ≈ √(πN) hashes for 2 sets; search capped at 8·√N per set. Max 38 bits (~80 MB table).
+- Dashboard hides another attack's result when a different tab is open (it showed the brute-force result on the MITM tab).
 - MITM max is 20 bits per key (1M table entries ≈ 80 MB in Redis). 18 bits ≈ 16 MB. Old tables are deleted when a new job starts.
 - **Demo laptop = the only machine:** Intel i5-6300U (2 cores / 4 threads), 8 GB RAM, 128 GB SSD.
   RAM is not a problem (worker ≈ 23 MB). CPU is the limit.
