@@ -126,6 +126,7 @@ async def load_job(jid: str) -> dict | None:
         "phase_ends": json.loads(h.get("phase_ends", f"[{nchunks}]")),
         "phase_names": json.loads(h.get("phase_names", '["search"]')),
         "table_size": await r.hlen(K.job_table(jid)),
+        "cracked": {u: json.loads(v) for u, v in (await r.hgetall(K.job_cracked(jid))).items()},
     }
     if status != "running":  # only reveal the real answer after the attack ends
         secret = await r.get(K.job_secret(jid))

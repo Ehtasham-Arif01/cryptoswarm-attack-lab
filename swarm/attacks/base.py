@@ -70,6 +70,8 @@ class Attack(ABC):
             value = params.get(key, spec["default"])
             if spec["type"] == "int":
                 value = max(spec["min"], min(spec["max"], int(value)))
+            elif spec["type"] == "choice" and value not in spec["options"]:
+                value = spec["default"]
             out[key] = value
         return out
 

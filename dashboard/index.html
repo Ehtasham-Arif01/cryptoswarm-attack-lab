@@ -27,7 +27,7 @@
     <button class="tab active" data-tab="bruteforce">1 · Brute Force DES</button>
     <button class="tab" data-tab="mitm">2 · Meet-in-the-Middle</button>
     <button class="tab" data-tab="birthday">3 · Birthday Attack</button>
-    <button class="tab" disabled title="Week 2">4 · Passwords</button>
+    <button class="tab" data-tab="passwords">4 · Passwords</button>
     <button class="tab" disabled title="Week 3">5 · Padding Oracle</button>
     <button class="tab" disabled title="Week 3">6 · Classical Ciphers</button>
   </nav>
@@ -45,10 +45,10 @@
         <label class="slider">
           <span>Secret key bits: <b class="bits-out" data-for="bf-bits">20</b> →
             <span id="bf-space">1,048,576</span> keys</span>
-          <input id="bf-bits" type="range" min="12" max="32" value="20" />
+          <input id="bf-bits" data-param="bits" type="range" min="12" max="32" value="20" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="bruteforce" data-slider="bf-bits">▶ Start attack</button>
+          <button class="btn primary start" data-attack="bruteforce" data-inputs="bf-bits">▶ Start attack</button>
           <button class="btn cancel">■ Cancel</button>
         </div>
       </div>
@@ -70,10 +70,10 @@
         <label class="slider">
           <span>Bits per key: <b class="bits-out" data-for="mitm-bits">18</b> →
             naive <span id="mitm-naive">68.7 G</span> tries vs MITM <span id="mitm-ops">524 k</span> ops</span>
-          <input id="mitm-bits" type="range" min="12" max="20" value="18" />
+          <input id="mitm-bits" data-param="bits" type="range" min="12" max="20" value="18" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="mitm" data-slider="mitm-bits">▶ Start attack</button>
+          <button class="btn primary start" data-attack="mitm" data-inputs="mitm-bits">▶ Start attack</button>
           <button class="btn cancel">■ Cancel</button>
         </div>
       </div>
@@ -92,10 +92,35 @@
         </div>
         <label class="slider">
           <span>Hash size: <b class="bits-out" data-for="bd-bits">34</b> bits (SHA-256 truncated)</span>
-          <input id="bd-bits" type="range" min="20" max="38" value="34" />
+          <input id="bd-bits" data-param="bits" type="range" min="20" max="38" value="34" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="birthday" data-slider="bd-bits">▶ Start attack</button>
+          <button class="btn primary start" data-attack="birthday" data-inputs="bd-bits">▶ Start attack</button>
+          <button class="btn cancel">■ Cancel</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" data-panel="passwords">
+        <h2>Cracking a leaked password table</h2>
+        <p class="muted">
+          A website's user table leaked: 12 usernames and their stored password hashes. The swarm tries
+          <span id="pw-dict">common words × mangling rules</span> (<code>Dragon</code>, <code>sh4d0w</code>,
+          <code>monkey2019</code>, <code>pepper123!</code>…). How the site stored the passwords decides how long that takes.
+        </p>
+        <label class="slider">
+          <span>How the website stored the passwords</span>
+          <select id="pw-scheme" data-param="scheme" class="select">
+            <option value="md5">MD5 (no salt): fast hash, equal passwords → equal hashes</option>
+            <option value="md5_salted">MD5 + random salt per user</option>
+            <option value="bcrypt">bcrypt: salted and deliberately slow</option>
+          </select>
+        </label>
+        <label class="slider" id="pw-cost-row">
+          <span>bcrypt cost: <b class="bits-out" data-for="pw-cost">8</b> (2<sup id="pw-cost-sup">8</sup> rounds, each +1 doubles the work)</span>
+          <input id="pw-cost" data-param="cost" type="range" min="4" max="12" value="8" />
+        </label>
+        <div class="buttons">
+          <button class="btn primary start" data-attack="passwords" data-inputs="pw-scheme,pw-cost">▶ Start attack</button>
           <button class="btn cancel">■ Cancel</button>
         </div>
       </div>
@@ -169,6 +194,20 @@
       </table>
       <p class="muted small">MD5 and SHA-1 were also broken by smarter (non-birthday) attacks, so real collisions exist.
         Use SHA-256 or better for signatures.</p>
+    </section>
+
+    <section class="card side panel hidden" data-panel="passwords">
+      <h2>🗄️ Leaked user table</h2>
+      <table class="reality-table leak">
+        <thead><tr><th>User</th><th>Stored hash</th><th>Password</th></tr></thead>
+        <tbody id="leak-body"><tr><td colspan="3" class="muted">Start an attack to "leak" a table.</td></tr></tbody>
+      </table>
+      <h2 class="mt">🔒 Fix: salt + slow hash + strong passwords</h2>
+      <table class="reality-table">
+        <thead><tr><th>Storage</th><th>Work for this dictionary</th><th>Time for this swarm</th></tr></thead>
+        <tbody id="pw-fix-body"></tbody>
+      </table>
+      <p class="muted small">Times are based on this swarm's measured speed and a per-core benchmark of each hash.</p>
     </section>
 
     <!-- ================= Events ================= -->

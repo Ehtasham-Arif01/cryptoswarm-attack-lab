@@ -71,17 +71,27 @@ function updateSliders() {
   const b = Number($("bd-bits").value);
   $("bd-space").textContent = fmtNum(2 ** b);
   $("bd-expected").textContent = fmtNum(Math.sqrt(Math.PI * 2 ** b));
+  $("pw-cost-sup").textContent = $("pw-cost").value;
+  $("pw-cost-row").classList.toggle("hidden", $("pw-scheme").value !== "bcrypt");
   if (lastState) render(lastState);
 }
-document.querySelectorAll("input[type=range]").forEach((s) => s.addEventListener("input", updateSliders));
+document.querySelectorAll("input[type=range], select").forEach((s) => s.addEventListener("input", updateSliders));
 
 async function post(url, body) {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
   if (!res.ok) console.error(`Request failed: ${res.status}`);
   return res.json().catch(() => ({}));
 }
+function readParams(button) {
+  const params = {};
+  for (const id of button.dataset.inputs.split(",")) {
+    const el = $(id);
+    params[el.dataset.param] = el.type === "range" ? Number(el.value) : el.value;
+  }
+  return params;
+}
 document.querySelectorAll(".start").forEach((b) =>
-  b.addEventListener("click", () => post("/api/jobs", { attack: b.dataset.attack, params: { bits: Number($(b.dataset.slider).value) } })),
+  b.addEventListener("click", () => post("/api/jobs", { attack: b.dataset.attack, params: readParams(b) })),
 );
 document.querySelectorAll(".cancel").forEach((b) => b.addEventListener("click", () => post("/api/jobs/cancel")));
 
@@ -172,6 +182,60 @@ function renderBirthdayFix(job) {
       ${timeCell(Math.sqrt(Math.PI * 2 ** r.bits) / rate)}</tr>`).join("");
 }
 
+let pwCores = null; // swarm speed expressed in "full CPU cores", measured during a passwords run
+const seenCracked = new Set();
+
+function renderLeak(job) {
+  if (!job || job.attack !== "passwords") return;
+  const m = job.meta;
+  const owners = {};
+  m.users.forEach((u) => (owners[u.hash] = owners[u.hash] ? [...owners[u.hash], u.user] : [u.user]));
+  const secret = job.secret ? job.secret.passwords : null;
+  $("leak-body").innerHTML = m.users.map((u) => {
+    const c = job.cracked[u.user];
+    const key = job.id + u.user;
+    const isNew = c && !seenCracked.has(key);
+    if (c) seenCracked.add(key);
+    const twins = owners[u.hash].filter((x) => x !== u.user);
+    const shown = m.scheme === "bcrypt" ? u.hash.slice(0, 29) + "…" : (u.salt ? u.salt.slice(0, 6) + "…:" : "") + u.hash;
+    const pwCell = c
+      ? `<td class="cracked">🔓 ${esc(c.password)}</td>`
+      : job.status === "running"
+        ? '<td class="locked">🔒 ••••••</td>'
+        : `<td class="locked">🔒 not in dictionary${secret ? ` <span class="muted small">(${esc(secret[u.user])})</span>` : ""}</td>`;
+    return `<tr class="${isNew ? "new" : ""}"><td>${esc(u.user)}</td>
+      <td class="hash mono" title="${esc(u.hash)}">${esc(shown)}${twins.length ? `<span class="dup">⚠ same hash as ${esc(twins.join(", "))}</span>` : ""}</td>${pwCell}</tr>`;
+  }).join("");
+}
+
+function renderPwFix(job) {
+  const isPw = job && job.attack === "passwords";
+  if (isPw && job.status === "running" && smoothRate > 0) {
+    const perCore = job.meta.scheme === "bcrypt" ? job.meta.bench.bcrypt : job.meta.bench.md5;
+    pwCores = smoothRate / perCore;
+  } else if (isPw && !pwCores && job.elapsed > 0.5) {
+    const perCore = job.meta.scheme === "bcrypt" ? job.meta.bench.bcrypt : job.meta.bench.md5;
+    pwCores = job.tried / job.elapsed / perCore;
+  }
+  if (!isPw) {
+    $("pw-fix-body").innerHTML = '<tr><td colspan="3" class="muted">Run an attack to measure this swarm.</td></tr>';
+    return;
+  }
+  const m = job.meta, C = m.candidates, U = m.users.length;
+  const bcryptAt = (cost) => m.bench.bcrypt * 2 ** (m.cost - cost); // per-core speed at another cost
+  const t = (work, perCore) => (pwCores ? work / (pwCores * perCore) : NaN);
+  const rows = [
+    { name: "MD5 + rainbow table", work: "precomputed: just a lookup", time: "<td>≈ 0 s</td>", broken: true },
+    { name: "MD5, no salt", work: fmtNum(C), time: timeCell(t(C, m.bench.md5)), broken: true },
+    { name: "MD5 + salt", work: fmtNum(C * U), time: timeCell(t(C * U, m.bench.md5)) },
+    { name: "bcrypt, cost 8", work: fmtNum(C * U), time: timeCell(t(C * U, bcryptAt(8))) },
+    { name: "bcrypt, cost 12", work: fmtNum(C * U), time: timeCell(t(C * U, bcryptAt(12))), fix: true },
+    { name: "bcrypt 12 + random 12-char password", work: "2^71 per user", time: timeCell(t(2 ** 71, bcryptAt(12))), fix: true },
+  ];
+  $("pw-fix-body").innerHTML = rows.map((r) => `<tr class="${r.broken ? "broken" : r.fix ? "fixed" : ""}">
+    <td>${esc(r.name)}${r.broken ? " ⚠️" : r.fix ? " ✅" : ""}</td><td>${r.work}</td>${r.time}</tr>`).join("");
+}
+
 const markAmount = (text, amount, cls) => esc(text).replace(esc(amount), `<mark class="${cls}">${esc(amount)}</mark>`);
 
 let chartJob = null;
@@ -248,7 +312,34 @@ const ATTACK_UI = {
         <p class="muted small">🔒 Fix: use the full 256-bit SHA-256. Its birthday bound is 2<sup>128</sup>.</p>`;
     },
   },
+  passwords: {
+    triedLabel: "Hashes computed",
+    statusLabel: { exhausted: "complete" },
+    extra: (job) => ["Accounts cracked", `${Object.keys(job.cracked).length} / ${job.meta.users.length}`],
+    meta: (m) => `
+      <dt>Storage</dt><dd>${esc(schemeLabel(m))}</dd>
+      <dt>Dictionary</dt><dd>${m.words} words × ${m.rules} rules = ${fmtNum(m.candidates)} guesses</dd>
+      <dt>Work</dt><dd>${m.per_guess === 1 ? "1 hash per guess (checks all users at once)" : `${m.per_guess} hashes per guess (one per user)`}</dd>
+      <dt>1-core speed</dt><dd>MD5 ${fmtNum(m.bench.md5)}/s · bcrypt(cost ${m.cost}) ${m.bench.bcrypt}/s</dd>`,
+    result: (job) => passwordsSummary(job),
+    complete: (job) => passwordsSummary(job),
+  },
 };
+
+const schemeLabel = (m) => ({ md5: "MD5, no salt", md5_salted: "MD5 + per-user salt", bcrypt: `bcrypt, cost ${m.cost}` }[m.scheme]);
+
+function passwordsSummary(job) {
+  const m = job.meta, n = Object.keys(job.cracked).length;
+  const lesson = {
+    md5: "Unsalted fast hashes fall in seconds, and two users with the same password had the same hash. Precomputed (rainbow) tables would make it even faster.",
+    md5_salted: `Salt removed the shared hashes and made precomputed tables useless, but the work only grew ${m.users.length}× and MD5 is still fast.`,
+    bcrypt: "bcrypt makes every guess expensive. Only the most obvious passwords fall in reasonable time.",
+  }[m.scheme];
+  return `
+    <h2>${n ? "🔓" : "🔒"} Cracked ${n} of ${m.users.length} accounts in ${fmtDuration(job.elapsed)} (${esc(schemeLabel(m))})</h2>
+    <p class="muted">${lesson} The random passwords were never in the dictionary, so they survived even MD5.</p>
+    <p class="muted small">🔒 Fix: salt + a slow hash (bcrypt / scrypt / Argon2) <b>and</b> long random passwords.</p>`;
+}
 
 const workerTag = (wid) => `<b style="color:${color(wid)}">${esc(wid)}</b>`;
 
@@ -281,6 +372,8 @@ function render(s) {
   renderBruteforceFix(job);
   renderMitmFix(job);
   renderBirthdayFix(job);
+  renderLeak(job);
+  renderPwFix(job);
   if (activeTab === "birthday") renderBirthdayChart(job);
   renderEvents(s.events);
   if (job && job.status === "running") updateCharts(job, s);
@@ -294,7 +387,7 @@ function renderJob(job) {
     return;
   }
   const pct = Math.min(100, (100 * job.tried) / job.total);
-  $("t-status").textContent = job.status;
+  $("t-status").textContent = (ui.statusLabel && ui.statusLabel[job.status]) || job.status;
   $("t-status").className = "value status-" + job.status;
   $("t-progress").textContent = pct.toFixed(1) + "%";
   $("t-bar").style.width = pct + "%";
@@ -304,10 +397,13 @@ function renderJob(job) {
   $("t-eta").textContent = job.status === "running" && smoothRate > 0 ? fmtDuration((job.total - job.tried) / smoothRate) : "n/a";
 
   const multiPhase = job.phase_ends.length > 1;
-  $("t-extra-label").textContent = multiPhase ? "Phase · table size" : "Chunks";
-  $("t-extra").textContent = multiPhase
-    ? `${job.phase + 1}/${job.phase_ends.length} · ${fmtNum(job.table_size)}`
-    : `${job.chunks_done.filter(Boolean).length}/${job.nchunks}`;
+  const [extraLabel, extraValue] = ui.extra
+    ? ui.extra(job)
+    : multiPhase
+      ? ["Phase · table size", `${job.phase + 1}/${job.phase_ends.length} · ${fmtNum(job.table_size)}`]
+      : ["Chunks", `${job.chunks_done.filter(Boolean).length}/${job.nchunks}`];
+  $("t-extra-label").textContent = extraLabel;
+  $("t-extra").textContent = extraValue;
 
   const otherTab = job.attack !== activeTab;
   $("job-meta").innerHTML = otherTab
@@ -323,7 +419,7 @@ function renderJob(job) {
     el.innerHTML = ui.result(job);
   } else if (job.status === "exhausted") {
     el.classList.remove("hidden");
-    el.innerHTML = "<h2>Search space exhausted without a match</h2>";
+    el.innerHTML = ui.complete ? ui.complete(job) : "<h2>Search space exhausted without a match</h2>";
   } else {
     el.classList.add("hidden");
   }

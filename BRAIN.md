@@ -62,7 +62,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - ✅ Visual check of the dashboard (user checked in browser; headless Chrome screenshots)
 - ⬜ Faster Python DES path (DES.new() is ~85% of per-key cost), or bring the Rust worker forward
 
-### Week 2: More attacks + Break→Fix
+### Week 2: More attacks + Break→Fix ✅ (done 2026-11-24)
 - ✅ Platform: multi-phase attacks (later phases queued only when the previous phase is done; Lua `ADVANCE_PHASE`)
 - ✅ Attack 2: Meet-in-the-middle on Double DES (`swarm/attacks/mitm.py`): phase 1 builds the shared Redis table
   E(k1,P1)→k1 (48-bit tags), phase 2 looks up D(k2,C1) in batches (HMGET) and confirms with a 2nd pair.
@@ -74,8 +74,14 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   atomic HSETNX ("L<i>"/"F<i>"), collision = fair and fraud wordings share a tag.
   Tested with 8 workers: 30 bits 2.5 s, 34 bits 4.2 s, 36 bits 23 s; collision verified independently.
   Dashboard: contracts side by side with amounts highlighted, theory curve 1−e^(−k²/4N) with the swarm's point, fix table.
-- ⬜ Attack 4: Password cracking MD5 vs bcrypt, salt vs rainbow table
-- 🚧 Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ✅ (full-hash table), passwords ⬜
+- ✅ Attack 4: Password cracking (`swarm/attacks/passwords.py`): leaked table of 12 users (alice…trent),
+  9 dictionary passwords (2 users share one) + 3 strong random ones. Dictionary = 122 words × 708 rules
+  (case/l33t × digits/years/symbols) = 86k guesses, ordered easiest first. Schemes: MD5, MD5+salt, bcrypt (cost 4–12).
+  Several answers per job → `swarm:job:<id>:cracked` hash; job ends "complete" when all chunks are done.
+  Measured (8 workers): MD5 9/12 in 0.4 s · MD5+salt 9/12 in 1.2 s (12× work) · bcrypt cost 8: 1/12 after 45 s
+  (78 checks/s; full run ≈ 3.7 h). 1-core benchmark: MD5 ≈ 840k/s, bcrypt cost 10 ≈ 9/s.
+  Dashboard: leaked-table view with "same hash as…" warnings, cracked passwords, fix table using measured speed.
+- ✅ Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ✅ (full-hash table), passwords ✅ (salt/bcrypt/strong-password table)
 
 ### Week 3: Advanced attacks + platform features
 - ⬜ Attack 5: Padding oracle on AES-CBC (vulnerable server container) → fix with Encrypt-then-MAC
@@ -112,6 +118,8 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 
 ## 7. Notes / gotchas
+- Passwords: candidate generator has ~0.2% duplicates (l33t doesn't change words without a/e/i/o/s/t). Harmless.
+- Start buttons send the params of the inputs listed in `data-inputs` (each input has `data-param`).
 - Birthday: expected work ≈ √(πN) hashes for 2 sets; search capped at 8·√N per set. Max 38 bits (~80 MB table).
 - Dashboard hides another attack's result when a different tab is open (it showed the brute-force result on the MITM tab).
 - MITM max is 20 bits per key (1M table entries ≈ 80 MB in Redis). 18 bits ≈ 16 MB. Old tables are deleted when a new job starts.

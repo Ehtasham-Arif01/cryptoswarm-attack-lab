@@ -62,6 +62,11 @@ def job_table(jid: str) -> str:
     return f"{PREFIX}:job:{jid}:table"
 
 
+def job_cracked(jid: str) -> str:
+    """Hash user -> json, for attacks that find several answers (passwords)."""
+    return f"{PREFIX}:job:{jid}:cracked"
+
+
 def id_from_key(key: str) -> str:
     """'swarm:worker:abc' -> 'abc'."""
     return key.split(":", 2)[2]
