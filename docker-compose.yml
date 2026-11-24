@@ -1,0 +1,37 @@
+# Start:   docker compose up -d --build
+# Scale:   docker compose up -d --scale worker=8
+# Kill one worker (fault-tolerance demo):  docker kill <container>
+# Dashboard: http://localhost:8090
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 10
+
+  coordinator:
+    build: { context: ., dockerfile: coordinator/Dockerfile }
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis: { condition: service_healthy }
+
+  worker:
+    build: { context: ., dockerfile: worker/Dockerfile }
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis: { condition: service_healthy }
+    stop_grace_period: 5s
+
+  dashboard:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${DASHBOARD_PORT:-8090}:80"
+    depends_on: [coordinator]
