@@ -25,7 +25,7 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="bruteforce">1 · Brute Force DES</button>
-    <button class="tab" disabled title="Week 2">2 · Meet-in-the-Middle</button>
+    <button class="tab" data-tab="mitm">2 · Meet-in-the-Middle</button>
     <button class="tab" disabled title="Week 2">3 · Birthday Attack</button>
     <button class="tab" disabled title="Week 2">4 · Passwords</button>
     <button class="tab" disabled title="Week 3">5 · Padding Oracle</button>
@@ -33,66 +33,109 @@
   </nav>
 
   <main class="layout">
-    <!-- Attack control -->
+    <!-- ================= Attack control (one panel per tab) ================= -->
     <section class="card control">
-      <h2>Known-plaintext brute force on DES</h2>
-      <p class="muted">
-        The attacker knows one plaintext block and its ciphertext. Most of the key has "leaked";
-        only <b id="bits-label">20</b> effective key bits are secret. The swarm tries every key until one fits.
-      </p>
-      <label class="slider">
-        <span>Secret key bits: <b id="bits-value">20</b> → <span id="bits-space">1,048,576</span> keys</span>
-        <input id="bits" type="range" min="12" max="32" value="20" />
-      </label>
-      <div class="buttons">
-        <button id="start" class="btn primary">▶ Start attack</button>
-        <button id="cancel" class="btn">■ Cancel</button>
+      <div class="panel" data-panel="bruteforce">
+        <h2>Known-plaintext brute force on DES</h2>
+        <p class="muted">
+          The attacker knows one plaintext block and its ciphertext. Most of the key has "leaked";
+          only <b class="bits-out" data-for="bf-bits">20</b> effective key bits are secret.
+          The swarm tries every key until one fits.
+        </p>
+        <label class="slider">
+          <span>Secret key bits: <b class="bits-out" data-for="bf-bits">20</b> →
+            <span id="bf-space">1,048,576</span> keys</span>
+          <input id="bf-bits" type="range" min="12" max="32" value="20" />
+        </label>
+        <div class="buttons">
+          <button class="btn primary start" data-attack="bruteforce" data-slider="bf-bits">▶ Start attack</button>
+          <button class="btn cancel">■ Cancel</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" data-panel="mitm">
+        <h2>Meet-in-the-middle on Double DES</h2>
+        <p class="muted">
+          Double DES encrypts twice with two keys: <code>C = E(k2, E(k1, P))</code>.
+          Two <b class="bits-out" data-for="mitm-bits">18</b>-bit keys sound like
+          <b id="mitm-naive-bits">36</b> bits of security, but the swarm "meets in the middle":
+        </p>
+        <div class="flow">
+          <div class="flow-box">P</div>
+          <div class="flow-arrow">E(k1, ·) →<small>phase 1: build table</small></div>
+          <div class="flow-box mid">M</div>
+          <div class="flow-arrow">← D(k2, ·)<small>phase 2: look up</small></div>
+          <div class="flow-box">C</div>
+        </div>
+        <label class="slider">
+          <span>Bits per key: <b class="bits-out" data-for="mitm-bits">18</b> →
+            naive <span id="mitm-naive">68.7 G</span> tries vs MITM <span id="mitm-ops">524 k</span> ops</span>
+          <input id="mitm-bits" type="range" min="12" max="20" value="18" />
+        </label>
+        <div class="buttons">
+          <button class="btn primary start" data-attack="mitm" data-slider="mitm-bits">▶ Start attack</button>
+          <button class="btn cancel">■ Cancel</button>
+        </div>
       </div>
       <dl class="kv" id="job-meta"></dl>
     </section>
 
-    <!-- Stats tiles -->
+    <!-- ================= Stats tiles (shared) ================= -->
     <section class="tiles">
       <div class="tile"><span class="label">Status</span><span id="t-status" class="value">idle</span></div>
       <div class="tile"><span class="label">Progress</span><span id="t-progress" class="value">0%</span>
         <div class="bar"><div id="t-bar"></div></div></div>
-      <div class="tile"><span class="label">Keys tried</span><span id="t-tried" class="value">0</span></div>
+      <div class="tile"><span class="label" id="t-tried-label">Keys tried</span><span id="t-tried" class="value">0</span></div>
       <div class="tile"><span class="label">Elapsed</span><span id="t-elapsed" class="value">0 s</span></div>
       <div class="tile"><span class="label">ETA (worst case)</span><span id="t-eta" class="value">n/a</span></div>
+      <div class="tile"><span class="label" id="t-extra-label">Phase</span><span id="t-extra" class="value">n/a</span></div>
     </section>
 
     <section id="result" class="card result hidden"></section>
 
-    <!-- Heatmap -->
+    <!-- ================= Heatmap ================= -->
     <section class="card heat">
-      <h2>Keyspace map <span class="muted small">(each cell is one chunk, colored by the worker searching it)</span></h2>
+      <h2>Search map <span class="muted small" id="heat-legend">(each cell is one chunk, colored by the worker searching it)</span></h2>
       <div id="heatmap" class="heatmap"></div>
     </section>
 
-    <!-- Speed chart -->
+    <!-- ================= Speed chart ================= -->
     <section class="card chart">
-      <h2>Swarm speed <span class="muted small">(keys / second, last 60 s)</span></h2>
+      <h2>Swarm speed <span class="muted small">(operations / second)</span></h2>
       <div class="chart-box"><canvas id="speed-chart"></canvas></div>
     </section>
 
-    <!-- Workers -->
+    <!-- ================= Workers ================= -->
     <section class="card workers">
       <h2>Workers <span class="muted small">scale with <code>docker compose up -d --scale worker=8</code></span></h2>
       <div id="worker-grid" class="worker-grid"></div>
     </section>
 
-    <!-- Reality check -->
-    <section class="card reality">
-      <h2>🔒 Reality check: why real key sizes matter</h2>
-      <p class="muted small">Average time for <b>this swarm</b> at its current speed to find a key (half the keyspace).</p>
+    <!-- ================= Per-tab side panel ================= -->
+    <section class="card side panel" data-panel="bruteforce">
+      <h2>🔒 Fix: use real key sizes</h2>
+      <p class="muted small">Average time for <b>this swarm</b> at its speed to find a key (half the keyspace).</p>
       <table class="reality-table">
         <thead><tr><th>Cipher</th><th>Key bits</th><th>Keyspace</th><th>Time for this swarm</th></tr></thead>
         <tbody id="reality-body"></tbody>
       </table>
-      <p class="muted small" id="universe-note">Age of the universe ≈ 1.38 × 10¹⁰ years.</p>
+      <p class="muted small">Age of the universe ≈ 1.38 × 10¹⁰ years.</p>
     </section>
 
-    <!-- Events -->
+    <section class="card side panel hidden" data-panel="mitm">
+      <h2>🏁 Race: meet-in-the-middle vs naive brute force</h2>
+      <p class="muted small">Both get the same operations per second. Progress on a log scale.</p>
+      <div class="chart-box small-chart"><canvas id="race-chart"></canvas></div>
+      <h2 class="mt">🔒 Fix: Triple DES</h2>
+      <table class="reality-table">
+        <thead><tr><th>Scheme</th><th>Best attack</th><th>Work</th><th>Time for this swarm</th></tr></thead>
+        <tbody id="mitm-fix-body"></tbody>
+      </table>
+      <p class="muted small">MITM still works against 3DES but only removes one of the three keys, so the work stays at
+        2<sup>2n</sup>. Real 3DES (3 × 56-bit keys) has 112-bit security.</p>
+    </section>
+
+    <!-- ================= Events ================= -->
     <section class="card events">
       <h2>Event log</h2>
       <ul id="events" class="event-list"></ul>

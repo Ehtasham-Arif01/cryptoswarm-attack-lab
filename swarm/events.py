@@ -27,3 +27,13 @@ if redis.call('HGET', KEYS[1], 'status') == 'running' then
 end
 return 0
 """
+
+# Advance a running job from phase ARGV[1] to ARGV[1]+1 exactly once.
+# KEYS[1] = job hash
+ADVANCE_PHASE_LUA = """
+if redis.call('HGET', KEYS[1], 'status') == 'running' and redis.call('HGET', KEYS[1], 'phase') == ARGV[1] then
+  redis.call('HSET', KEYS[1], 'phase', tonumber(ARGV[1]) + 1)
+  return 1
+end
+return 0
+"""

@@ -59,14 +59,19 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - ✅ End-to-end test: 22-bit key cracked + verified; `docker kill` of a worker → chunk requeued, job still finished
 - ✅ README with run instructions
 - ✅ Create private GitHub repo + first push
-- ⬜ Visual check of the dashboard in a browser (only tested through the API so far)
+- ✅ Visual check of the dashboard (user checked in browser; headless Chrome screenshots)
 - ⬜ Faster Python DES path (DES.new() is ~85% of per-key cost), or bring the Rust worker forward
 
 ### Week 2: More attacks + Break→Fix
-- ⬜ Attack 2: Meet-in-the-middle on Double DES (2 phases, shared Redis table) + naive vs MITM race chart
+- ✅ Platform: multi-phase attacks (later phases queued only when the previous phase is done; Lua `ADVANCE_PHASE`)
+- ✅ Attack 2: Meet-in-the-middle on Double DES (`swarm/attacks/mitm.py`): phase 1 builds the shared Redis table
+  E(k1,P1)→k1 (48-bit tags), phase 2 looks up D(k2,C1) in batches (HMGET) and confirms with a 2nd pair.
+  Tested: 18-bit keys, 8 workers → both keys in 12 s; 19-bit, 4 workers → 34 s. Unit tests: 3.
+- ✅ Dashboard tabs (brute force + MITM), flow diagram, naive-vs-MITM race chart (log scale), 3DES fix table
+- ⬜ Check the race chart and speed chart fill in properly during a real-time run (headless screenshots can't show this)
 - ⬜ Attack 3: Birthday attack on truncated SHA-256 + √N curve and probability chart
 - ⬜ Attack 4: Password cracking MD5 vs bcrypt, salt vs rainbow table
-- ⬜ Break→Fix toggle on each attack (bigger key / 3DES / full hash / bcrypt+salt)
+- 🚧 Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ⬜, passwords ⬜
 
 ### Week 3: Advanced attacks + platform features
 - ⬜ Attack 5: Padding oracle on AES-CBC (vulnerable server container) → fix with Encrypt-then-MAC
@@ -98,8 +103,12 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | Dashboard in plain JS + Chart.js (no React build step for now) | Faster to build, no build step; can move to React later |
 | 2026-11-24 | Chart.js stored in the repo (`dashboard/vendor/`) | Demo must work without classroom internet |
 | 2026-11-24 | Reduced DES keys use only effective bits (not parity bits) | Parity bits are ignored by DES and would create duplicate keys |
+| 2026-11-24 | Workers capped at 0.25 CPU each by default | Only machine is a 2-core i5-6300U; the cap makes scaling visible (≈15× from 1→8) |
+| 2026-11-24 | MITM 3DES fix shown as a computed table, not a running attack | An attack that can't finish isn't a useful demo; the table shows the times at the swarm's real speed |
+| 2026-11-24 | No Claude co-author lines in commits | User's request |
 
 ## 7. Notes / gotchas
+- MITM max is 20 bits per key (1M table entries ≈ 80 MB in Redis). 18 bits ≈ 16 MB. Old tables are deleted when a new job starts.
 - **Demo laptop = the only machine:** Intel i5-6300U (2 cores / 4 threads), 8 GB RAM, 128 GB SSD.
   RAM is not a problem (worker ≈ 23 MB). CPU is the limit.
 - **Uncapped workers** (WORKER_CPUS=0): 1 → 52k keys/s · 2 → 86k · 4 → 94k · 8 → 88k. Stops at 2 cores.

@@ -41,7 +41,7 @@ class BruteForceDES(Attack):
             "ciphertext": ciphertext.hex(),
         }
         summary = f"Brute-force DES with {bits} secret bits: {total:,} keys in {n_chunks} chunks"
-        return Plan(meta, chunks, total, {"key": key.hex(), "index": secret_index}, summary)
+        return Plan(meta, [chunks], total, {"key": key.hex(), "index": secret_index}, summary, ["key search"])
 
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         bits = meta["bits"]

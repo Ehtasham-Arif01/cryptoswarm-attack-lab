@@ -16,7 +16,7 @@ import redis
 
 from swarm import keys as K
 from swarm.attacks import ATTACKS
-from swarm.events import FINISH_JOB_LUA, push_event
+from swarm.events import ADVANCE_PHASE_LUA, FINISH_JOB_LUA, push_event
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 FLUSH_EVERY = 0.25  # seconds between progress reports to Redis
@@ -27,6 +27,7 @@ class ChunkContext:
 
     def __init__(self, worker: "Worker", job_id: str, chunk_id: int):
         self.w = worker
+        self.r = worker.r  # attacks with shared tables use this
         self.job_id = job_id
         self.chunk_id = chunk_id
         self.pending = 0
@@ -63,6 +64,7 @@ class Worker:
         self.id = os.environ.get("WORKER_ID") or socket.gethostname()[:12]
         self.r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
         self.finish_job = self.r.register_script(FINISH_JOB_LUA)
+        self.advance_phase = self.r.register_script(ADVANCE_PHASE_LUA)
         self.lock = threading.Lock()
         self.stopping = False
         self.state = {
@@ -116,23 +118,41 @@ class Worker:
         pipe.hdel(K.chunk_progress(jid), cid)
         pipe.sadd(K.chunks_done(jid), cid)
         pipe.scard(K.chunks_done(jid))
-        pipe.hget(K.job(jid), "nchunks")
-        *_, n_done, n_chunks = pipe.execute()
+        pipe.hmget(K.job(jid), "phase", "phase_ends", "phase_names")
+        *_, n_done, (phase, ends, names) = pipe.execute()
         with self.lock:
             self.state["chunks_done"] += 1
 
         now = str(time.time())
+        ends = json.loads(ends)
+        phase = int(phase)
         if result.get("found"):
-            result["worker"] = self.id
+            result.update(worker=self.id, chunk=cid)
             if self.finish_job(keys=[K.job(jid)], args=["found", json.dumps(result), now]):
                 push_event(self.r, f"🔓 Worker {self.id} cracked job {jid}! {self.describe(result)}", "success")
-        elif int(n_done) >= int(n_chunks or 0):
+        elif n_done >= ends[-1]:
             if self.finish_job(keys=[K.job(jid)], args=["exhausted", json.dumps({}), now]):
                 push_event(self.r, f"Job {jid}: search space exhausted, nothing found", "warn")
+        elif n_done >= ends[phase] and self.advance_phase(keys=[K.job(jid)], args=[phase]):
+            self.start_phase(jid, phase + 1, json.loads(names))
+
+    def start_phase(self, jid: str, phase: int, names: list[str]) -> None:
+        """Move the waiting tasks of `phase` onto the queue (first task picked up first)."""
+        tasks = self.r.lrange(K.job_phase(jid, phase), 0, -1)
+        pipe = self.r.pipeline()
+        if tasks:
+            pipe.lpush(K.QUEUE, *tasks)
+        pipe.delete(K.job_phase(jid, phase))
+        pipe.execute()
+        push_event(self.r, f"⏭ Job {jid}: phase {phase + 1} ({names[phase]}) started, {len(tasks)} chunks queued")
 
     @staticmethod
     def describe(result: dict) -> str:
-        return f"key = 0x{result['key']}" if "key" in result else ""
+        if "key" in result:
+            return f"key = 0x{result['key']}"
+        if "k1" in result:
+            return f"k1 = 0x{result['k1']}, k2 = 0x{result['k2']}"
+        return ""
 
     def handle(self, raw: str) -> None:
         task = json.loads(raw)

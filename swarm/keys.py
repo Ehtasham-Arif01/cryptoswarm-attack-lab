@@ -52,6 +52,16 @@ def chunk_progress(jid: str) -> str:
     return f"{PREFIX}:job:{jid}:progress"
 
 
+def job_phase(jid: str, phase: int) -> str:
+    """Tasks of a later phase, waiting until the previous phase is finished."""
+    return f"{PREFIX}:job:{jid}:phase:{phase}"
+
+
+def job_table(jid: str) -> str:
+    """Shared lookup table for attacks that need one (MITM, birthday)."""
+    return f"{PREFIX}:job:{jid}:table"
+
+
 def id_from_key(key: str) -> str:
     """'swarm:worker:abc' -> 'abc'."""
     return key.split(":", 2)[2]

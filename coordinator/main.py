@@ -122,6 +122,10 @@ async def load_job(jid: str) -> dict | None:
         "elapsed": (finished or time.time()) - float(h["created"]),
         "result": json.loads(h["result"]) if h.get("result") else None,
         "secret": None,
+        "phase": int(h.get("phase", 0)),
+        "phase_ends": json.loads(h.get("phase_ends", f"[{nchunks}]")),
+        "phase_names": json.loads(h.get("phase_names", '["search"]')),
+        "table_size": await r.hlen(K.job_table(jid)),
     }
     if status != "running":  # only reveal the real answer after the attack ends
         secret = await r.get(K.job_secret(jid))
@@ -181,6 +185,9 @@ async def create_job(req: JobRequest):
         raise HTTPException(404, f"unknown attack '{req.attack}'")
     await cancel_current()
     await r.delete(K.QUEUE)
+    old = await r.get(K.CURRENT_JOB)
+    if old:  # free the previous job's lookup table (can be ~80 MB)
+        await r.delete(K.job_table(old))
 
     params = attack.clean_params(req.params)
     plan = attack.plan(params)
@@ -197,14 +204,20 @@ async def create_job(req: JobRequest):
             "total": plan.total,
             "tried": 0,
             "nchunks": len(plan.chunks),
+            "phase": 0,
+            "phase_ends": json.dumps(plan.phase_ends),
+            "phase_names": json.dumps(plan.phase_names),
             "created": time.time(),
         },
     )
     pipe.set(K.job_secret(jid), json.dumps(plan.secret))
     pipe.set(K.CURRENT_JOB, jid)
     pipe.lpush(K.JOBS, jid)
+    task = lambda c: json.dumps({"job_id": jid, "chunk": c})  # noqa: E731
     # LPUSH in order, so chunk 0 sits at the right end and is popped first
-    pipe.lpush(K.QUEUE, *[json.dumps({"job_id": jid, "chunk": c}) for c in plan.chunks])
+    pipe.lpush(K.QUEUE, *[task(c) for c in plan.phases[0]])
+    for i, phase in enumerate(plan.phases[1:], start=1):  # later phases wait until the previous one ends
+        pipe.rpush(K.job_phase(jid, i), *[task(c) for c in phase])
     await pipe.execute()
     await event(f"▶ Job {jid} started. {plan.summary}")
     return {"id": jid}

@@ -3,8 +3,9 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// ---------------------------------------------------------------- formatting
+// ================================================================ formatting
 function fmtNum(n) {
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + " T";
   if (n >= 1e9) return (n / 1e9).toFixed(2) + " G";
   if (n >= 1e6) return (n / 1e6).toFixed(2) + " M";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + " k";
@@ -31,85 +32,178 @@ function fmtDuration(sec) {
   return sci(years) + " years";
 }
 
+const AGE_UNIVERSE_S = 1.38e10 * 365.25 * 86400;
+const timeCell = (secs) => {
+  if (!isFinite(secs)) return "<td>start an attack</td>";
+  const danger = secs > AGE_UNIVERSE_S;
+  return `<td class="${danger ? "safe" : ""}">${fmtDuration(secs)}${danger ? " 🌌" : ""}</td>`;
+};
+
 function hue(id) {
   let h = 0;
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
   return h;
 }
 const color = (id, l = 60) => `hsl(${hue(id)} 75% ${l}%)`;
+const hexToAscii = (h) => h.match(/../g).map((b) => String.fromCharCode(parseInt(b, 16))).join("");
 
-// ---------------------------------------------------------------- controls
-const bits = $("bits");
-function updateBits() {
-  const b = Number(bits.value);
-  $("bits-value").textContent = b;
-  $("bits-label").textContent = b;
-  $("bits-space").textContent = (2 ** b).toLocaleString();
+// ================================================================ tabs
+let activeTab = "bruteforce";
+let autoTabbedJob = null;
+
+function showTab(name) {
+  activeTab = name;
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+  document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
+  if (lastState) render(lastState);
 }
-bits.addEventListener("input", updateBits);
-updateBits();
+document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+
+// ================================================================ controls
+function updateSliders() {
+  document.querySelectorAll(".bits-out").forEach((el) => (el.textContent = $(el.dataset.for).value));
+  const bf = Number($("bf-bits").value);
+  $("bf-space").textContent = (2 ** bf).toLocaleString();
+  const m = Number($("mitm-bits").value);
+  $("mitm-naive-bits").textContent = 2 * m;
+  $("mitm-naive").textContent = fmtNum(2 ** (2 * m));
+  $("mitm-ops").textContent = fmtNum(2 ** (m + 1));
+  if (lastState) render(lastState);
+}
+document.querySelectorAll("input[type=range]").forEach((s) => s.addEventListener("input", updateSliders));
 
 async function post(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  if (!res.ok) alertBox(`Request failed: ${res.status}`);
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  if (!res.ok) console.error(`Request failed: ${res.status}`);
   return res.json().catch(() => ({}));
 }
-function alertBox(msg) { console.error(msg); }
+document.querySelectorAll(".start").forEach((b) =>
+  b.addEventListener("click", () => post("/api/jobs", { attack: b.dataset.attack, params: { bits: Number($(b.dataset.slider).value) } })),
+);
+document.querySelectorAll(".cancel").forEach((b) => b.addEventListener("click", () => post("/api/jobs/cancel")));
 
-$("start").addEventListener("click", () => {
-  speedChart.data.labels = [];
-  speedChart.data.datasets[0].data = [];
-  post("/api/jobs", { attack: "bruteforce", params: { bits: Number(bits.value) } });
-});
-$("cancel").addEventListener("click", () => post("/api/jobs/cancel"));
-
-// ---------------------------------------------------------------- chart
+// ================================================================ charts
+const axis = { ticks: { color: "#8a96ad", maxTicksLimit: 6 }, grid: { color: "#1c2538" } };
 const speedChart = new Chart($("speed-chart"), {
   type: "line",
   data: { labels: [], datasets: [{ data: [], borderColor: "#36d399", backgroundColor: "rgba(54,211,153,.12)", fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
   options: {
-    animation: false,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtNum(c.parsed.y) + " keys/s" } } },
+    animation: false, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtNum(c.parsed.y) + " ops/s" } } },
+    scales: { x: axis, y: { ...axis, beginAtZero: true, suggestedMax: 1000, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } } },
+  },
+});
+
+const raceChart = new Chart($("race-chart"), {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [
+      { label: "Meet-in-the-middle", data: [], borderColor: "#36d399", pointRadius: 0, borderWidth: 2, tension: 0.2 },
+      { label: "Naive brute force (same speed)", data: [], borderColor: "#f0616d", pointRadius: 0, borderWidth: 2, tension: 0.2 },
+    ],
+  },
+  options: {
+    animation: false, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: "#e6ebf5", boxWidth: 12 } },
+      tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toPrecision(3)}%` } },
+    },
     scales: {
-      x: { ticks: { color: "#8a96ad", maxTicksLimit: 6 }, grid: { color: "#1c2538" } },
-      y: { beginAtZero: true, ticks: { color: "#8a96ad", callback: (v) => fmtNum(v) }, grid: { color: "#1c2538" } },
+      x: { ...axis, title: { display: true, text: "seconds", color: "#8a96ad" } },
+      y: { ...axis, type: "logarithmic", min: 1e-7, max: 100, ticks: { ...axis.ticks, callback: (v) => ([100, 1, 1e-2, 1e-4, 1e-6].includes(v) ? v + "%" : "") } },
     },
   },
 });
 
-// ---------------------------------------------------------------- state
+let chartJob = null;
+function resetCharts(jobId) {
+  chartJob = jobId;
+  for (const ch of [speedChart, raceChart]) {
+    ch.data.labels = [];
+    ch.data.datasets.forEach((d) => (d.data = []));
+  }
+}
+
+// ================================================================ per-attack UI
+const ATTACK_UI = {
+  bruteforce: {
+    triedLabel: "Keys tried",
+    meta: (m) => `
+      <dt>Plaintext</dt><dd>0x${esc(m.plaintext)} ("${esc(hexToAscii(m.plaintext))}")</dd>
+      <dt>Ciphertext</dt><dd>0x${esc(m.ciphertext)}</dd>
+      <dt>Known key prefix</dt><dd>0x${esc(m.prefix)}</dd>
+      <dt>Secret bits</dt><dd>${m.bits} (${(2 ** m.bits).toLocaleString()} keys)</dd>`,
+    result: (job) => {
+      const ok = job.secret && job.secret.key === job.result.key;
+      return `
+        <h2>🔓 Key cracked in ${fmtDuration(job.elapsed)}</h2>
+        <p class="big">0x${esc(job.result.key)}</p>
+        <p class="muted">Found by worker ${workerTag(job.result.worker)} after ${fmtNum(job.tried)} of ${fmtNum(job.total)} keys.
+          ${ok ? "✅ Verified against the real secret key." : "⚠️ Does not match the stored secret."}</p>
+        <p class="muted small">🔒 Fix: use enough key bits. Every extra bit doubles the work; see the table on the right.</p>`;
+    },
+  },
+  mitm: {
+    triedLabel: "Operations",
+    meta: (m) => `
+      <dt>Pair 1</dt><dd>P1 = "${esc(hexToAscii(m.p1))}" → C1 = 0x${esc(m.c1)}</dd>
+      <dt>Pair 2</dt><dd>P2 = "${esc(hexToAscii(m.p2))}" → C2 = 0x${esc(m.c2)}</dd>
+      <dt>k1 prefix</dt><dd>0x${esc(m.prefix1)}</dd>
+      <dt>k2 prefix</dt><dd>0x${esc(m.prefix2)}</dd>
+      <dt>Key bits</dt><dd>2 × ${m.bits} = ${2 * m.bits} (naive keyspace ${fmtNum(2 ** (2 * m.bits))})</dd>`,
+    result: (job) => {
+      const s = job.secret, r = job.result;
+      const ok = s && s.k1 === r.k1 && s.k2 === r.k2;
+      const naive = 2 ** (2 * job.meta.bits);
+      return `
+        <h2>🔓 Both Double-DES keys recovered in ${fmtDuration(job.elapsed)}</h2>
+        <p class="big">k1 = 0x${esc(r.k1)} &nbsp; k2 = 0x${esc(r.k2)}</p>
+        <p class="muted">Found by worker ${workerTag(r.worker)} with ${fmtNum(job.tried)} operations instead of
+          up to ${fmtNum(naive)} naive tries, <b>${fmtNum(naive / job.tried)}× less work</b>.
+          Confirmed with the second plaintext/ciphertext pair.
+          ${ok ? "✅ Matches the real secret keys." : "⚠️ Does not match the stored secret."}</p>
+        <p class="muted small">🔒 Fix: Triple DES. A third encryption pushes meet-in-the-middle back to 2<sup>2n</sup> work.</p>`;
+    },
+  },
+};
+
+const workerTag = (wid) => `<b style="color:${color(wid)}">${esc(wid)}</b>`;
+
+// ================================================================ render
 let smoothRate = 0;
-const lastSeen = new Map(); // worker id -> {worker, t}
+let lastRate = 0; // last real speed, so the fix tables still work when idle
+let lastState = null;
+const lastSeen = new Map();
 const DEAD_SHOW_SECONDS = 15;
 
 function render(s) {
+  lastState = s;
+  const job = s.job;
   smoothRate = smoothRate * 0.6 + s.swarm_rate * 0.4;
+  if (job && job.status === "running" && smoothRate > 100) lastRate = smoothRate;
+
   $("top-workers").textContent = s.workers.length;
   $("top-rate").textContent = fmtNum(smoothRate) + "/s";
   $("top-queue").textContent = s.queue_depth;
 
-  renderJob(s.job);
-  renderWorkers(s);
-  renderReality(s.job);
-  renderEvents(s.events);
-
-  const t = new Date(s.t * 1000).toLocaleTimeString([], { minute: "2-digit", second: "2-digit" });
-  const d = speedChart.data;
-  if (s.job && s.job.status === "running") {
-    d.labels.push(t);
-    d.datasets[0].data.push(s.swarm_rate);
-    if (d.labels.length > 120) { d.labels.shift(); d.datasets[0].data.shift(); }
-    speedChart.update();
+  if (job && autoTabbedJob !== job.id) { // jump to the tab of a newly started job
+    autoTabbedJob = job.id;
+    if (job.attack !== activeTab && ATTACK_UI[job.attack]) return showTab(job.attack);
   }
+  if (job && chartJob !== job.id) resetCharts(job.id);
+
+  renderJob(job);
+  renderWorkers(s);
+  renderBruteforceFix(job);
+  renderMitmFix(job);
+  renderEvents(s.events);
+  if (job && job.status === "running") updateCharts(job, s);
 }
 
 function renderJob(job) {
-  if (!job) {
+  const ui = job && ATTACK_UI[job.attack];
+  if (!job || !ui) {
     $("t-status").textContent = "idle";
     $("heatmap").innerHTML = '<span class="empty">No attack yet. Press Start.</span>';
     return;
@@ -119,77 +213,79 @@ function renderJob(job) {
   $("t-status").className = "value status-" + job.status;
   $("t-progress").textContent = pct.toFixed(1) + "%";
   $("t-bar").style.width = pct + "%";
+  $("t-tried-label").textContent = ui.triedLabel;
   $("t-tried").textContent = fmtNum(job.tried);
   $("t-elapsed").textContent = fmtDuration(job.elapsed);
   $("t-eta").textContent = job.status === "running" && smoothRate > 0 ? fmtDuration((job.total - job.tried) / smoothRate) : "n/a";
 
-  const m = job.meta;
-  $("job-meta").innerHTML = `
-    <dt>Job</dt><dd>${esc(job.id)}</dd>
-    <dt>Plaintext</dt><dd>0x${esc(m.plaintext)} ("${esc(hexToAscii(m.plaintext))}")</dd>
-    <dt>Ciphertext</dt><dd>0x${esc(m.ciphertext)}</dd>
-    <dt>Known key prefix</dt><dd>0x${esc(m.prefix)}</dd>
-    <dt>Secret bits</dt><dd>${m.bits} (${(2 ** m.bits).toLocaleString()} keys)</dd>`;
+  const multiPhase = job.phase_ends.length > 1;
+  $("t-extra-label").textContent = multiPhase ? "Phase · table size" : "Chunks";
+  $("t-extra").textContent = multiPhase
+    ? `${job.phase + 1}/${job.phase_ends.length} · ${fmtNum(job.table_size)}`
+    : `${job.chunks_done.filter(Boolean).length}/${job.nchunks}`;
+
+  $("job-meta").innerHTML = `<dt>Job</dt><dd>${esc(job.id)} · ${esc(job.title)}</dd>` + ui.meta(job.meta);
 
   renderHeatmap(job);
-  renderResult(job);
-}
-
-function hexToAscii(h) {
-  return h.match(/../g).map((b) => String.fromCharCode(parseInt(b, 16))).join("");
+  const el = $("result");
+  if (job.status === "found") {
+    el.classList.remove("hidden");
+    el.innerHTML = ui.result(job);
+  } else if (job.status === "exhausted") {
+    el.classList.remove("hidden");
+    el.innerHTML = "<h2>Search space exhausted without a match</h2>";
+  } else {
+    el.classList.add("hidden");
+  }
 }
 
 function renderHeatmap(job) {
   const el = $("heatmap");
   const n = job.nchunks;
+  const ends = job.phase_ends;
   el.style.gridTemplateColumns = `repeat(${Math.min(32, n)}, 1fr)`;
   if (el.childElementCount !== n || el.dataset.job !== job.id) {
     el.innerHTML = "";
     el.dataset.job = job.id;
-    for (let i = 0; i < n; i++) {
-      const c = document.createElement("div");
-      c.className = "cell";
-      el.appendChild(c);
-    }
+    for (let i = 0; i < n; i++) el.appendChild(document.createElement("div"));
   }
-  const size = job.total / n;
-  const foundChunk = job.result && job.result.found ? Math.floor(job.result.index / size) : -1;
+  $("heat-legend").textContent = ends.length > 1
+    ? `(${job.phase_names.map((p, i) => `${i ? "lower" : "upper"} half = ${p}`).join(", ")}; each cell is one chunk)`
+    : "(each cell is one chunk, colored by the worker searching it)";
+  const foundChunk = job.result && job.result.found ? job.result.chunk : -1;
   [...el.children].forEach((c, i) => {
     const wid = job.inflight[i];
+    const phaseCls = i >= ends[0] ? " p2" : "";
     if (i === foundChunk) {
       c.className = "cell found";
       c.style.background = "";
     } else if (wid && job.status === "running") {
       c.className = "cell inflight";
       c.style.background = color(wid);
-    } else if (job.chunks_done[i]) {
-      c.className = "cell done";
-      c.style.background = "";
     } else {
-      c.className = "cell";
+      c.className = "cell" + phaseCls + (job.chunks_done[i] ? " done" : "");
       c.style.background = "";
     }
-    c.title = `chunk #${i}${wid ? " · " + wid : ""}`;
+    c.title = `chunk #${i} · ${job.phase_names[ends.findIndex((e) => i < e)]}${wid ? " · " + wid : ""}`;
   });
 }
 
-function renderResult(job) {
-  const el = $("result");
-  if (job.status === "found") {
-    const ok = job.secret && job.secret.key === job.result.key;
-    el.classList.remove("hidden");
-    el.innerHTML = `
-      <h2>🔓 Key cracked in ${fmtDuration(job.elapsed)}</h2>
-      <p class="big">0x${esc(job.result.key)}</p>
-      <p class="muted">Found by worker <b style="color:${color(job.result.worker)}">${esc(job.result.worker)}</b>
-        after ${fmtNum(job.tried)} of ${fmtNum(job.total)} keys.
-        ${ok ? "✅ Verified against the real secret key." : "⚠️ Does not match the stored secret."}</p>
-      <p class="muted small">🔒 Fix: use enough key bits. Every extra bit doubles the work; see the reality check below.</p>`;
-  } else if (job.status === "exhausted") {
-    el.classList.remove("hidden");
-    el.innerHTML = `<h2>Search space exhausted without a match</h2>`;
-  } else {
-    el.classList.add("hidden");
+function updateCharts(job, s) {
+  const t = job.elapsed.toFixed(0);
+  speedChart.data.labels.push(new Date(s.t * 1000).toLocaleTimeString([], { minute: "2-digit", second: "2-digit" }));
+  speedChart.data.datasets[0].data.push(s.swarm_rate);
+  if (speedChart.data.labels.length > 120) {
+    speedChart.data.labels.shift();
+    speedChart.data.datasets[0].data.shift();
+  }
+  speedChart.update();
+
+  if (job.attack === "mitm") {
+    const naiveSpace = 2 ** (2 * job.meta.bits);
+    raceChart.data.labels.push(t);
+    raceChart.data.datasets[0].data.push(Math.max(1e-7, (100 * job.tried) / job.total));
+    raceChart.data.datasets[1].data.push(Math.max(1e-7, (100 * job.tried) / naiveSpace));
+    raceChart.update();
   }
 }
 
@@ -207,33 +303,40 @@ function renderWorkers(s) {
   }
   const card = (w, isDead) => `
     <div class="wcard ${isDead ? "dead" : w.status}" style="--c:${color(w.id)}">
-      <span class="lang">${esc(w.lang)}${w.cpus ? " · " + w.cpus + " cpu" : ""}</span>
       <div class="wid">${esc(w.id)}</div>
+      <div class="lang">${esc(w.lang)}${w.cpus ? " · " + w.cpus + " cpu" : ""}</div>
       <div class="wrate">${isDead ? "💀 offline" : fmtNum(w.rate) + "/s"}</div>
-      <div class="muted">${isDead ? "chunk requeued" : w.status === "working" ? "chunk #" + w.chunk : "idle"}
-        · ${w.chunks_done} done</div>
+      <div class="muted">${isDead ? "chunk requeued" : w.status === "working" ? "chunk #" + w.chunk : "idle"} · ${w.chunks_done} done</div>
     </div>`;
   grid.innerHTML = s.workers.map((w) => card(w, false)).join("") + dead.map((x) => card(x.worker, true)).join("");
 }
 
-function renderReality(job) {
-  const rate = smoothRate > 0 ? smoothRate : null;
-  const rows = [];
-  if (job && job.meta.bits) rows.push({ name: "This demo", bits: job.meta.bits, current: true });
-  rows.push(
+function renderBruteforceFix(job) {
+  const rate = lastRate || NaN;
+  const bits = job && job.attack === "bruteforce" ? job.meta.bits : Number($("bf-bits").value);
+  const rows = [
+    { name: "This demo", bits, current: true },
     { name: "DES (real)", bits: 56 },
     { name: "3DES (112-bit security)", bits: 112 },
     { name: "AES-128", bits: 128 },
     { name: "AES-256", bits: 256 },
-  );
-  const AGE_UNIVERSE_S = 1.38e10 * 365.25 * 86400;
-  $("reality-body").innerHTML = rows.map((r) => {
-    const secs = rate ? 2 ** (r.bits - 1) / rate : NaN;
-    const danger = secs > AGE_UNIVERSE_S;
-    return `<tr class="${r.current ? "current" : ""}">
-      <td>${esc(r.name)}</td><td>${r.bits}</td><td>2^${r.bits}</td>
-      <td class="${danger ? "danger" : ""}">${rate ? fmtDuration(secs) + (danger ? " 🌌" : "") : "start an attack"}</td></tr>`;
-  }).join("");
+  ];
+  $("reality-body").innerHTML = rows.map((r) => `<tr class="${r.current ? "current" : ""}">
+      <td>${esc(r.name)}</td><td>${r.bits}</td><td>2^${r.bits}</td>${timeCell(2 ** (r.bits - 1) / rate)}</tr>`).join("");
+}
+
+function renderMitmFix(job) {
+  const rate = lastRate || NaN;
+  const n = job && job.attack === "mitm" ? job.meta.bits : Number($("mitm-bits").value);
+  const rows = [
+    { name: `Single DES (${n}-bit key)`, attack: "brute force", exp: n },
+    { name: `Double DES (2 × ${n})`, attack: "naive brute force", exp: 2 * n },
+    { name: `Double DES (2 × ${n})`, attack: "meet-in-the-middle", exp: n + 1, broken: true },
+    { name: `Triple DES (3 × ${n})`, attack: "meet-in-the-middle", exp: 2 * n, fix: true },
+    { name: "Real 3DES (3 × 56)", attack: "meet-in-the-middle", exp: 112, fix: true },
+  ];
+  $("mitm-fix-body").innerHTML = rows.map((r) => `<tr class="${r.broken ? "broken" : r.fix ? "fixed" : ""}">
+      <td>${esc(r.name)}${r.broken ? " ⚠️" : r.fix ? " ✅" : ""}</td><td>${r.attack}</td><td>2^${r.exp}</td>${timeCell(2 ** r.exp / rate)}</tr>`).join("");
 }
 
 function renderEvents(events) {
@@ -243,7 +346,7 @@ function renderEvents(events) {
   }).join("");
 }
 
-// ---------------------------------------------------------------- websocket
+// ================================================================ websocket
 function connect() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
   ws.onopen = () => { $("conn-dot").className = "dot on"; $("conn-text").textContent = "live"; };
@@ -254,4 +357,5 @@ function connect() {
     setTimeout(connect, 1000);
   };
 }
+updateSliders();
 connect();
