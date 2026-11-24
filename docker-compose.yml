@@ -13,7 +13,11 @@ services:
       retries: 10
 
   coordinator:
-    build: { context: ., dockerfile: coordinator/Dockerfile }
+    build:
+      context: .
+      dockerfile: coordinator/Dockerfile
+      labels:  # links the image to the GitHub repo (needed to push to ghcr.io from Actions)
+        org.opencontainers.image.source: ${IMAGE_SOURCE:-https://github.com/Ehtasham-Arif01/cryptoswarm-attack-lab}
     image: ${REGISTRY:-cryptoswarm}/coordinator:${TAG:-local}
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -25,7 +29,11 @@ services:
       redis: { condition: service_healthy }
 
   worker:
-    build: { context: ., dockerfile: worker/Dockerfile }
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+      labels:  # links the image to the GitHub repo (needed to push to ghcr.io from Actions)
+        org.opencontainers.image.source: ${IMAGE_SOURCE:-https://github.com/Ehtasham-Arif01/cryptoswarm-attack-lab}
     image: ${REGISTRY:-cryptoswarm}/worker:${TAG:-local}
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -42,7 +50,11 @@ services:
   # The deliberately vulnerable web server for the padding-oracle attack.
   # It is the "victim": not CPU-capped, not reachable from the host.
   oracle:
-    build: { context: ., dockerfile: oracle/Dockerfile }
+    build:
+      context: .
+      dockerfile: oracle/Dockerfile
+      labels:  # links the image to the GitHub repo (needed to push to ghcr.io from Actions)
+        org.opencontainers.image.source: ${IMAGE_SOURCE:-https://github.com/Ehtasham-Arif01/cryptoswarm-attack-lab}
     image: ${REGISTRY:-cryptoswarm}/oracle:${TAG:-local}
 
   dashboard:
