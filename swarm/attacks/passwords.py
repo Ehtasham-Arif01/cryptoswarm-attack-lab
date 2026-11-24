@@ -172,7 +172,7 @@ class PasswordCracking(Attack):
         def crack(user: str, password: str) -> bool:
             info = json.dumps({"password": password, "t": time.time()})
             if ctx.r.hsetnx(cracked_key, user, info):
-                push_event(ctx.r, f"🔓 Cracked {user}: \"{password}\" ({meta['scheme']})", "success")
+                push_event(ctx.r, f"Cracked {user}: \"{password}\" ({meta['scheme']})", "success")
             cracked.add(user)
             return len(cracked) == len(users)
 

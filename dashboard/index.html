@@ -4,12 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CryptoSwarm: Distributed Crypto Attack Lab</title>
+  <link rel="preload" href="fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">⬢</span>
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 27.7 9.25v13.5L16 29.5 4.3 22.75V9.25z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="16" cy="16" r="3.2" fill="currentColor"/><path d="M16 12.8V7.5M18.8 17.6l4.6 2.6M13.2 17.6l-4.6 2.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <div>
         <h1>CryptoSwarm</h1>
         <p>Distributed Crypto Attack Lab: break it, then fix it</p>
@@ -20,6 +21,7 @@
       <div><span class="label">Swarm speed</span><span id="top-rate" class="value">0</span></div>
       <div><span class="label">Queue</span><span id="top-queue" class="value">0</span></div>
       <div class="conn"><span id="conn-dot" class="dot off"></span><span id="conn-text">offline</span></div>
+      <button id="presenter" class="btn ghost" title="Larger text for the projector (P)">Presenter</button>
     </div>
   </header>
 
@@ -30,8 +32,8 @@
     <button class="tab" data-tab="passwords">4 · Passwords</button>
     <button class="tab" data-tab="padding_oracle">5 · Padding Oracle</button>
     <button class="tab" data-tab="classical">6 · Classical Ciphers</button>
-    <button class="tab tab-cost" data-tab="cost">💰 Cost to Crack</button>
-    <button class="tab tab-history" data-tab="history">📜 History</button>
+    <button class="tab tab-cost" data-tab="cost">Cost to crack</button>
+    <button class="tab tab-history" data-tab="history">History</button>
   </nav>
 
   <main class="layout">
@@ -50,8 +52,8 @@
           <input id="bf-bits" data-param="bits" type="range" min="12" max="32" value="20" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="bruteforce" data-inputs="bf-bits">▶ Start attack</button>
-          <button class="btn cancel">■ Cancel</button>
+          <button class="btn primary start" data-attack="bruteforce" data-inputs="bf-bits"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3v10l8.5-5z" fill="currentColor"/></svg>Start attack</button>
+          <button class="btn cancel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>Cancel</button>
         </div>
       </div>
 
@@ -75,8 +77,8 @@
           <input id="mitm-bits" data-param="bits" type="range" min="12" max="20" value="18" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="mitm" data-inputs="mitm-bits">▶ Start attack</button>
-          <button class="btn cancel">■ Cancel</button>
+          <button class="btn primary start" data-attack="mitm" data-inputs="mitm-bits"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3v10l8.5-5z" fill="currentColor"/></svg>Start attack</button>
+          <button class="btn cancel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>Cancel</button>
         </div>
       </div>
 
@@ -97,8 +99,8 @@
           <input id="bd-bits" data-param="bits" type="range" min="20" max="38" value="34" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="birthday" data-inputs="bd-bits">▶ Start attack</button>
-          <button class="btn cancel">■ Cancel</button>
+          <button class="btn primary start" data-attack="birthday" data-inputs="bd-bits"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3v10l8.5-5z" fill="currentColor"/></svg>Start attack</button>
+          <button class="btn cancel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>Cancel</button>
         </div>
       </div>
 
@@ -122,8 +124,8 @@
           <input id="pw-cost" data-param="cost" type="range" min="4" max="12" value="8" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="passwords" data-inputs="pw-scheme,pw-cost">▶ Start attack</button>
-          <button class="btn cancel">■ Cancel</button>
+          <button class="btn primary start" data-attack="passwords" data-inputs="pw-scheme,pw-cost"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3v10l8.5-5z" fill="currentColor"/></svg>Start attack</button>
+          <button class="btn cancel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>Cancel</button>
         </div>
       </div>
 
@@ -149,8 +151,8 @@
           </select>
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="padding_oracle" data-inputs="po-mode">▶ Start attack</button>
-          <button class="btn cancel">■ Cancel</button>
+          <button class="btn primary start" data-attack="padding_oracle" data-inputs="po-mode"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3v10l8.5-5z" fill="currentColor"/></svg>Start attack</button>
+          <button class="btn cancel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>Cancel</button>
         </div>
       </div>
 
@@ -180,8 +182,8 @@
           <input id="cl-len" data-param="key_len" type="range" min="2" max="10" value="6" />
         </label>
         <div class="buttons">
-          <button class="btn primary start" data-attack="classical" data-inputs="cl-cipher,cl-len">▶ Start attack</button>
-          <button class="btn cancel">■ Cancel</button>
+          <button class="btn primary start" data-attack="classical" data-inputs="cl-cipher,cl-len"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3v10l8.5-5z" fill="currentColor"/></svg>Start attack</button>
+          <button class="btn cancel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>Cancel</button>
         </div>
       </div>
       <dl class="kv" id="job-meta"></dl>
@@ -203,7 +205,7 @@
     <!-- ================= History (own tab, full width) ================= -->
     <section class="card wide panel hidden" data-panel="history">
       <div class="history-head">
-        <h2>📜 Attack history <span class="muted small" id="hist-count"></span></h2>
+        <h2>Attack history <span class="muted small" id="hist-count"></span></h2>
         <div class="history-actions">
           <select id="hist-filter" class="select">
             <option value="">All attacks</option>
@@ -214,12 +216,12 @@
             <option value="padding_oracle">5 · Padding Oracle</option>
             <option value="classical">6 · Classical Ciphers</option>
           </select>
-          <button id="hist-clear" class="btn">🗑 Clear history</button>
+          <button id="hist-clear" class="btn">Clear history</button>
         </div>
       </div>
       <div class="history-top">
         <div>
-          <h2>⚡ Scaling: brute-force speed vs number of workers <span class="muted small">(from your real runs)</span></h2>
+          <h2>Scaling: brute-force speed vs number of workers <span class="muted small">(from your real runs)</span></h2>
           <div class="chart-box small-chart"><canvas id="scale-chart"></canvas></div>
           <p class="muted small" id="scale-note"></p>
         </div>
@@ -236,7 +238,7 @@
 
     <!-- ================= Cost to crack (own tab, full width) ================= -->
     <section class="card wide panel hidden" data-panel="cost">
-      <h2>💰 What would it cost to crack this in the cloud?</h2>
+      <h2>What would it cost to crack this in the cloud?</h2>
       <p class="muted">Rent a fleet of cloud vCPUs, run the attack, pay by the hour. Average case: half the keyspace
         (for a hash collision, the birthday bound).</p>
       <div class="cost-controls">
@@ -266,7 +268,7 @@
         <tbody id="cost-body"><tr><td colspan="6" class="muted">Measuring speeds…</td></tr></tbody>
       </table>
       <p class="muted small" id="cost-source"></p>
-      <button id="cost-remeasure" class="btn">↻ Re-measure speeds</button>
+      <button id="cost-remeasure" class="btn">Re-measure speeds</button>
     </section>
 
     <!-- ================= Heatmap ================= -->
@@ -278,34 +280,34 @@
     <!-- ================= Speed chart ================= -->
     <section class="card chart">
       <h2>Swarm speed <span class="muted small">(operations / second)</span></h2>
-      <div class="chart-box"><canvas id="speed-chart"></canvas></div>
+      <div class="chart-box"><canvas id="speed-chart"></canvas><div class="chart-empty" id="speed-empty">Drawn live while an attack runs</div></div>
     </section>
 
     <!-- ================= Workers ================= -->
     <section class="card workers">
-      <h2>Workers <span class="muted small">scale with <code>docker compose up -d --scale worker=8</code></span></h2>
+      <h2>Workers <span class="muted small">Docker: <code>docker compose up -d --scale worker=8</code> · Kubernetes: autoscaled</span></h2>
       <div id="worker-grid" class="worker-grid"></div>
     </section>
 
     <!-- ================= Per-tab side panel ================= -->
     <section class="card side panel" data-panel="bruteforce">
-      <h2>🔒 Fix: use real key sizes</h2>
+      <h2><span class="fix-label">Fix</span>Use real key sizes</h2>
       <p class="muted small">Average time for <b>this swarm</b> at its speed to find a key (half the keyspace).</p>
       <table class="reality-table">
         <thead><tr><th>Cipher</th><th>Key bits</th><th>Keyspace</th><th>Time for this swarm</th></tr></thead>
         <tbody id="reality-body"></tbody>
       </table>
       <p class="muted small">Age of the universe ≈ 1.38 × 10¹⁰ years.</p>
-      <h2 class="mt">🦀 Python vs Rust worker <span class="muted small">(keys/s per worker, same CPU share)</span></h2>
+      <h2 class="mt">Python vs Rust worker <span class="muted small">(keys/s per worker, same CPU share)</span></h2>
       <div id="lang-compare" class="lang-compare"><span class="empty">Add Rust workers during a brute-force attack:
         <code>docker compose up -d --scale worker-rust=4</code></span></div>
     </section>
 
     <section class="card side panel hidden" data-panel="mitm">
-      <h2>🏁 Race: meet-in-the-middle vs naive brute force</h2>
+      <h2>Race: meet-in-the-middle vs naive brute force</h2>
       <p class="muted small">Both get the same operations per second. Progress on a log scale.</p>
       <div class="chart-box small-chart"><canvas id="race-chart"></canvas></div>
-      <h2 class="mt">🔒 Fix: Triple DES</h2>
+      <h2 class="mt"><span class="fix-label">Fix</span>Triple DES</h2>
       <table class="reality-table">
         <thead><tr><th>Scheme</th><th>Best attack</th><th>Work</th><th>Time for this swarm</th></tr></thead>
         <tbody id="mitm-fix-body"></tbody>
@@ -315,11 +317,11 @@
     </section>
 
     <section class="card side panel hidden" data-panel="birthday">
-      <h2>📈 Birthday curve: theory vs this run</h2>
+      <h2>Birthday curve: theory vs this run</h2>
       <p class="muted small">Probability that a fair/fraud collision exists after <i>k</i> hashes:
         1 − e<sup>−k²/4N</sup>. The dot is the swarm.</p>
       <div class="chart-box small-chart"><canvas id="bd-chart"></canvas></div>
-      <h2 class="mt">🔒 Fix: use the full hash</h2>
+      <h2 class="mt"><span class="fix-label">Fix</span>Use the full hash</h2>
       <table class="reality-table">
         <thead><tr><th>Hash</th><th>Bits</th><th>Birthday work</th><th>Time for this swarm</th></tr></thead>
         <tbody id="bd-fix-body"></tbody>
@@ -329,12 +331,12 @@
     </section>
 
     <section class="card side panel hidden" data-panel="passwords">
-      <h2>🗄️ Leaked user table</h2>
+      <h2>Leaked user table</h2>
       <table class="reality-table leak">
         <thead><tr><th>User</th><th>Stored hash</th><th>Password</th></tr></thead>
         <tbody id="leak-body"><tr><td colspan="3" class="muted">Start an attack to "leak" a table.</td></tr></tbody>
       </table>
-      <h2 class="mt">🔒 Fix: salt + slow hash + strong passwords</h2>
+      <h2 class="mt"><span class="fix-label">Fix</span>Salt, a slow hash and strong passwords</h2>
       <table class="reality-table">
         <thead><tr><th>Storage</th><th>Work for this dictionary</th><th>Time for this swarm</th></tr></thead>
         <tbody id="pw-fix-body"></tbody>
@@ -343,9 +345,9 @@
     </section>
 
     <section class="card side panel hidden" data-panel="padding_oracle">
-      <h2>🔍 Live decryption <span class="muted small">(one row per ciphertext block, recovered right to left)</span></h2>
+      <h2>Live decryption <span class="muted small">(one row per ciphertext block, recovered right to left)</span></h2>
       <div id="po-grid" class="po-grid"><span class="empty">Start an attack to get a session token.</span></div>
-      <h2 class="mt">🔒 Fix: Encrypt-then-MAC</h2>
+      <h2 class="mt"><span class="fix-label">Fix</span>Encrypt-then-MAC</h2>
       <p class="muted small">The fixed server appends <code>HMAC-SHA256(IV ‖ C)</code> to each token and checks it
         <b>before</b> decrypting (in constant time). Any tampered token gets the same <code>403 invalid session</code>
         and is never decrypted, so there's no oracle. Authenticated modes such as <b>AES-GCM</b> give the same
@@ -353,18 +355,18 @@
     </section>
 
     <section class="card side panel hidden" data-panel="classical">
-      <h2>📊 Step 1: index of coincidence per key length</h2>
+      <h2>Step 1: index of coincidence per key length</h2>
       <div class="chart-box small-chart"><canvas id="ioc-chart"></canvas></div>
-      <h2 class="mt">🔤 Letter frequencies</h2>
+      <h2 class="mt">Letter frequencies</h2>
       <div class="chart-box small-chart"><canvas id="freq-chart"></canvas></div>
-      <h2 class="mt">🔒 Fix: one-time pad or a modern cipher</h2>
+      <h2 class="mt"><span class="fix-label">Fix</span>One-time pad or a modern cipher</h2>
       <table class="reality-table">
         <thead><tr><th>Cipher</th><th>Keys</th><th>Frequency analysis</th></tr></thead>
         <tbody>
-          <tr class="broken"><td>Caesar ⚠️</td><td>25</td><td>instant (even brute force is instant)</td></tr>
-          <tr class="broken"><td>Vigenère ⚠️</td><td>26<sup>L</sup></td><td>milliseconds: L found from IoC, then 26 tries per column</td></tr>
-          <tr class="fixed"><td>One-time pad ✅</td><td>26<sup>n</sup></td><td>nothing to find: every plaintext is equally likely</td></tr>
-          <tr class="fixed"><td>AES-128 ✅</td><td>2<sup>128</sup></td><td>output looks random, so no statistics leak</td></tr>
+          <tr class="broken"><td><span class="dot-s bad"></span>Caesar</td><td>25</td><td>instant (even brute force is instant)</td></tr>
+          <tr class="broken"><td><span class="dot-s bad"></span>Vigenère</td><td>26<sup>L</sup></td><td>milliseconds: L found from IoC, then 26 tries per column</td></tr>
+          <tr class="fixed"><td><span class="dot-s good"></span>One-time pad</td><td>26<sup>n</sup></td><td>nothing to find: every plaintext is equally likely</td></tr>
+          <tr class="fixed"><td><span class="dot-s good"></span>AES-128</td><td>2<sup>128</sup></td><td>output looks random, so no statistics leak</td></tr>
         </tbody>
       </table>
       <p class="muted small">A one-time pad is perfectly secret but impractical: the key must be truly random, as long as the

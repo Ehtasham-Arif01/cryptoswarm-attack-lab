@@ -1,0 +1,29 @@
+# Processed by the nginx image's entrypoint (envsubst) at start:
+#   DNS_RESOLVER      Docker: 127.0.0.11   Kubernetes: kube-dns.kube-system.svc.cluster.local
+#   COORDINATOR_HOST  Docker: coordinator  Kubernetes: coordinator.<namespace>.svc.cluster.local
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+    index index.html;
+    server_tokens off;
+
+    # Re-resolve the coordinator every 5 s, so a restarted coordinator (new IP) doesn't cause 502s.
+    resolver ${DNS_RESOLVER} valid=5s ipv6=off;
+    set $coordinator http://${COORDINATOR_HOST}:8000;
+
+    location /api/ {
+        proxy_pass $coordinator;
+    }
+
+    location /ws {
+        proxy_pass $coordinator;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location /fonts/ {
+        add_header Cache-Control "public, max-age=604800";
+    }
+}

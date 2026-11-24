@@ -1,0 +1,30 @@
+# Autoscaling: KEDA asks the coordinator how much work is pending (queued + in-progress chunks)
+# and runs one worker pod per pending chunk, between 0 and 8 pods.
+# No attack running -> 0 workers. Start an attack -> pods appear within seconds.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+spec:
+  scaleTargetRef:
+    name: worker
+  minReplicaCount: 0
+  maxReplicaCount: 8
+  pollingInterval: 2     # seconds between checks
+  cooldownPeriod: 20     # seconds without work before scaling to 0
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies: [{ type: Pods, value: 8, periodSeconds: 5 }]
+        scaleDown:
+          stabilizationWindowSeconds: 10
+          policies: [{ type: Pods, value: 4, periodSeconds: 5 }]
+  triggers:
+    - type: metrics-api
+      metadata:
+        url: "http://coordinator.cryptoswarm.svc.cluster.local:8000/api/scaling"
+        valueLocation: "pending"
+        targetValue: "1"
+        activationTargetValue: "0"

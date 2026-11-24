@@ -30,7 +30,8 @@ Dashboard (nginx + JS/Chart.js) ⇄ WebSocket/REST ⇄ Coordinator (FastAPI)
   and `run_chunk()` (worker side). Register it in `swarm/attacks/__init__.py`.
 - **Reliable queue:** coordinator `LPUSH`es chunks → worker `BLMOVE`s into its own processing
   list → on heartbeat loss the coordinator requeues them (fault tolerance).
-- **Ports:** dashboard on **http://localhost:8090** (8080/8000 are taken on the dev machine).
+- **Ports:** dashboard on **http://localhost:8090** with Docker Compose (8080/8000 are taken on the dev machine);
+  on Kubernetes at **http://<minikube ip>:30080** (printed by `k8s-up.sh`).
 
 ## 3. Tech stack
 
@@ -115,8 +116,15 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   correct when workers are scaled mid-attack. Measured in one run: 1 → 2.9k, 2 → 4.7k, 4 → 13.3k, 8 → 40k keys/s.
 - ❌ PDF report export: dropped (user doesn't need to submit a report)
 
-### Week 4: DevOps + polish
-- ⬜ Kubernetes manifests + HPA autoscaling on queue depth
+### Week 4: DevOps + polish (done 2026-11-24)
+- ✅ Kubernetes (`k8s/`, kustomize) on **minikube** profile `cryptoswarm` (2 CPUs, 3 GB): redis, coordinator (PVC for
+  history), oracle, dashboard (NodePort 30080), worker + worker-rust deployments. All pods non-root, capabilities
+  dropped, workers with read-only root filesystem. `./scripts/k8s-up.sh` / `./scripts/k8s-down.sh`.
+- ✅ Autoscaling with **KEDA 2.21.1** (`k8s/keda.yaml`): metrics-api trigger on the coordinator's `/api/scaling`
+  (`pending` = queued + in-progress chunks, so busy workers aren't scaled away), target 1 chunk/pod, 0–8 pods,
+  poll 2 s, cooldown 20 s. Measured: 0 → 1 pod in 3 s, → 8 pods requested at 16 s, all ready at 30 s (~80 k keys/s);
+  back to 0 within ~30 s after the job. Smoke test passes 7/7 on Kubernetes starting from 0 workers.
+- ✅ Worker IDs safe for pods: `<deployment>-<pod suffix>` (e.g. `worker-lv9c7`), Python and Rust.
 - ✅ Rust worker (`worker-rust/`, brute-force DES only). Same Redis protocol as the Python worker (reliable queue,
   heartbeat with `lang: "rust"`, progress, FINISH Lua, SIGTERM requeue); hands other attacks' chunks back to the queue.
   Static musl binary on `scratch`, non-root: **1.95 MB image** (Python worker: 257 MB). Crates: des 0.8, redis 0.27,
@@ -137,7 +145,17 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   First green run: 2026-11-24 (~3.5 min). E2E on the runner: all 7 cases pass (padding oracle 7 s with 4 uncapped workers).
   GHCR push needed the `org.opencontainers.image.source` label (otherwise `denied`). Packages are private.
   Actions pinned to current majors (checkout v7, setup-python v7, login-action v4) to avoid the Node 20 deprecation.
-- ⬜ Demo script rehearsal, slides, report
+- ✅ UI redesign: no emojis anywhere (UI + event messages + smoke test output); bundled Inter + JetBrains Mono
+  (OFL, `dashboard/fonts/`); token-based dark theme; chart + worker colours from the validated dark categorical palette
+  (dataviz validator: all checks pass on surface #16181d); status colours reserved for good/warning/critical;
+  chips ("Attack succeeded", "Defence held", "Verified"), FIX labels, status dots; inline SVG logo/icons;
+  presenter mode (button or P key, rem-based scaling); empty states for charts and workers.
+- ✅ Dashboard is now its own image (`dashboard/Dockerfile`, nginx-unprivileged 1.31 slim + `apk upgrade`, uid 101,
+  port 8080, nginx config from a template: `DNS_RESOLVER`, `COORDINATOR_HOST`). Trivy: 0 HIGH/CRITICAL
+  (nginx 1.27 had 68). Built, scanned and pushed in CI like the others.
+- ✅ Demo kit: `./scripts/demo.sh [--check|--stop]` and **DEMO.md** (15-minute run sheet with measured timings,
+  troubleshooting table, numbers to remember).
+- ⬜ Rehearse the demo once end-to-end with the partner
 
 ### Optional (Tier 2, if time allows)
 - ⬜ Class Swarm: browser workers via QR code
@@ -168,6 +186,11 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - No local Rust toolchain needed: everything builds in Docker (`rust:1-alpine`). First build ≈ 3 min.
 - Run `python3 scripts/smoke_test.py` before a demo: it runs every attack against the live stack (~2 min).
 - After switching containers to non-root, an old `history` volume needs: `docker compose run --rm --no-deps --user root --entrypoint chown coordinator -R 10001:10001 /data`.
+- Headless Chrome with `--virtual-time-budget` can stall WebSockets (page shows "offline"). Take UI screenshots in
+  real time over the DevTools protocol instead.
+- KEDA images come from ghcr.io and can take >10 min on a slow network: `k8s-up.sh` waits on `condition=Available`
+  (not `rollout status`, which fails at the 10-min progress deadline).
+- minikube switches the default kubectl context to `cryptoswarm`; `kubectl config use-context <old>` to switch back.
 - Padding oracle test sends ~8k requests in-process, so it only decrypts the first + last block (~35 s).
 - `attack.plan()` runs in a thread in the coordinator (padding oracle makes an HTTP call to the oracle).
 - Passwords: candidate generator has ~0.2% duplicates (l33t doesn't change words without a/e/i/o/s/t). Harmless.

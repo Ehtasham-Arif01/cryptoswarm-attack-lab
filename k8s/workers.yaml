@@ -1,0 +1,56 @@
+# Python workers: replicas are managed by KEDA (keda.yaml), from 0 up to 8.
+# Each pod gets a quarter of a CPU, like the Docker Compose workers.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker, lang: python }
+    spec:
+      terminationGracePeriodSeconds: 10 # worker requeues its chunk on SIGTERM
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001 }
+      containers:
+        - name: worker
+          image: cryptoswarm/worker:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: REDIS_URL, value: "redis://redis:6379/0" }
+            - { name: ORACLE_URL, value: "http://oracle:9000" }
+            - { name: WORKER_CPUS, value: "0.25" }
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 256Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+---
+# Rust workers (brute-force DES only). Not autoscaled: scale by hand to compare, e.g.
+#   kubectl -n cryptoswarm scale deployment worker-rust --replicas=2
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-rust
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: worker-rust }
+  template:
+    metadata:
+      labels: { app: worker-rust, lang: rust }
+    spec:
+      terminationGracePeriodSeconds: 10
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001 }
+      containers:
+        - name: worker
+          image: cryptoswarm/worker-rust:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: REDIS_URL, value: "redis://redis:6379/0" }
+            - { name: WORKER_CPUS, value: "0.25" }
+          resources:
+            requests: { cpu: 100m, memory: 16Mi }
+            limits: { cpu: 250m, memory: 64Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }

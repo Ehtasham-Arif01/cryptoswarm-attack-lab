@@ -1,0 +1,56 @@
+# API, WebSocket, reaper (requeues dead workers' chunks), history recorder, /api/scaling for KEDA
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: history
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 256Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coordinator
+spec:
+  replicas: 1
+  strategy: { type: Recreate } # the history volume can only be mounted once
+  selector:
+    matchLabels: { app: coordinator }
+  template:
+    metadata:
+      labels: { app: coordinator }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001 }
+      containers:
+        - name: coordinator
+          image: cryptoswarm/coordinator:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: REDIS_URL, value: "redis://redis:6379/0" }
+            - { name: ORACLE_URL, value: "http://oracle:9000" }
+            - { name: HISTORY_DB, value: "/data/history.db" }
+          ports: [{ containerPort: 8000 }]
+          readinessProbe:
+            httpGet: { path: /api/health, port: 8000 }
+            periodSeconds: 3
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - { name: history, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+      volumes:
+        - name: history
+          persistentVolumeClaim: { claimName: history }
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coordinator
+spec:
+  selector: { app: coordinator }
+  ports: [{ port: 8000, targetPort: 8000 }]

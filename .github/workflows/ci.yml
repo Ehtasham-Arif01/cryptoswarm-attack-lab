@@ -88,7 +88,7 @@ jobs:
 
       - name: Trivy image scan (OS packages + Python packages inside the images)
         run: |
-          for svc in coordinator worker worker-rust oracle; do
+          for svc in coordinator worker worker-rust oracle dashboard; do
             echo "::group::Trivy: $svc"
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
               --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$REGISTRY/$svc:$TAG"
@@ -120,10 +120,10 @@ jobs:
       - name: Push images (commit SHA + latest)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          for svc in coordinator worker worker-rust oracle; do
+          for svc in coordinator worker worker-rust oracle dashboard; do
             docker push "$REGISTRY/$svc:$TAG"
             docker tag "$REGISTRY/$svc:$TAG" "$REGISTRY/$svc:latest"
             docker push "$REGISTRY/$svc:latest"
           done
           echo "### 📦 Images pushed" >> "$GITHUB_STEP_SUMMARY"
-          for svc in coordinator worker worker-rust oracle; do echo "- \`$REGISTRY/$svc:$TAG\`" >> "$GITHUB_STEP_SUMMARY"; done
+          for svc in coordinator worker worker-rust oracle dashboard; do echo "- \`$REGISTRY/$svc:$TAG\`" >> "$GITHUB_STEP_SUMMARY"; done

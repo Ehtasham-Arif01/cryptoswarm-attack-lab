@@ -1,0 +1,35 @@
+# The deliberately vulnerable AES-CBC session server (padding-oracle attack target)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oracle
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: oracle }
+  template:
+    metadata:
+      labels: { app: oracle }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001 }
+      containers:
+        - name: oracle
+          image: cryptoswarm/oracle:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 9000 }]
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oracle
+spec:
+  selector: { app: oracle }
+  ports: [{ port: 9000, targetPort: 9000 }]

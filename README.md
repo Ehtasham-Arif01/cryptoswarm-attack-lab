@@ -23,6 +23,25 @@ docker compose ps -q worker | head -1 | xargs docker kill   # kill one mid-attac
 docker compose down                           # stop everything
 ```
 
+## Demo
+
+```bash
+./scripts/demo.sh --check     # build, start, run every attack once, open the dashboard
+```
+
+Then follow **[DEMO.md](DEMO.md)**, the minute-by-minute run sheet. Press **P** in the dashboard for presenter mode.
+
+## Kubernetes (autoscaling)
+
+```bash
+./scripts/k8s-up.sh           # minikube cluster + KEDA + CryptoSwarm, prints the dashboard URL
+./scripts/k8s-down.sh         # delete the cluster
+```
+
+Worker pods are scaled by **KEDA** between 0 and 8 from the coordinator's `/api/scaling` metric
+(queued + in-progress chunks): no attack means no workers, and an attack brings up to 8 within seconds.
+Manifests: `k8s/` (non-root pods, dropped capabilities, read-only root filesystem for workers).
+
 ## Architecture
 
 ```

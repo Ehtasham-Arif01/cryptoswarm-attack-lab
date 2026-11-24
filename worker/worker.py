@@ -60,9 +60,21 @@ class ChunkContext:
         self.last = now
 
 
+def worker_id() -> str:
+    """Docker: 12-char container id. Kubernetes: pod "<deployment>-<replicaset hash>-<suffix>"
+    becomes "<deployment>-<suffix>", which is unique and still says what kind of worker it is."""
+    if os.environ.get("WORKER_ID"):
+        return os.environ["WORKER_ID"]
+    host = socket.gethostname()
+    parts = host.split("-")
+    if len(parts) >= 3:
+        return "-".join(parts[:-2] + parts[-1:])
+    return host[:12]
+
+
 class Worker:
     def __init__(self) -> None:
-        self.id = os.environ.get("WORKER_ID") or socket.gethostname()[:12]
+        self.id = worker_id()
         self.r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
         self.finish_job = self.r.register_script(FINISH_JOB_LUA)
         self.advance_phase = self.r.register_script(ADVANCE_PHASE_LUA)
@@ -130,10 +142,10 @@ class Worker:
         if result.get("found"):
             result.update(worker=self.id, chunk=cid)
             if self.finish_job(keys=[K.job(jid)], args=["found", json.dumps(result), now]):
-                push_event(self.r, f"🔓 Worker {self.id} cracked job {jid}! {self.describe(result)}", "success")
+                push_event(self.r, f"Worker {self.id} cracked job {jid}: {self.describe(result)}", "success")
         elif n_done >= ends[-1]:
             if self.finish_job(keys=[K.job(jid)], args=["exhausted", json.dumps({}), now]):
-                push_event(self.r, f"✔ Job {jid} complete: all {ends[-1]} chunks done")
+                push_event(self.r, f"Job {jid} complete: all {ends[-1]} chunks done")
         elif n_done >= ends[phase] and self.advance_phase(keys=[K.job(jid)], args=[phase]):
             self.start_phase(jid, phase + 1, json.loads(names))
 
@@ -145,7 +157,7 @@ class Worker:
             pipe.lpush(K.QUEUE, *tasks)
         pipe.delete(K.job_phase(jid, phase))
         pipe.execute()
-        push_event(self.r, f"⏭ Job {jid}: phase {phase + 1} ({names[phase]}) started, {len(tasks)} chunks queued")
+        push_event(self.r, f"Job {jid}: phase {phase + 1} ({names[phase]}) started, {len(tasks)} chunks queued")
 
     @staticmethod
     def describe(result: dict) -> str:
@@ -181,7 +193,7 @@ class Worker:
             ctx.flush()
             attempts = task.get("attempts", 0) + 1
             if attempts < MAX_ATTEMPTS:  # never mark a failed chunk as done: try it again
-                push_event(self.r, f"⚠ Worker {self.id}: chunk {chunk['id']} failed ({type(exc).__name__}), "
+                push_event(self.r, f"Worker {self.id}: chunk {chunk['id']} failed ({type(exc).__name__}), "
                                    f"retrying ({attempts}/{MAX_ATTEMPTS - 1})", "warn")
                 self.requeue(raw, task, json.dumps({**task, "attempts": attempts}))
                 self.set_state(status="idle", job=None, chunk=None)

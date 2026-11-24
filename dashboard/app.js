@@ -37,15 +37,21 @@ const AGE_UNIVERSE_S = 1.38e10 * 365.25 * 86400;
 const timeCell = (secs) => {
   if (!isFinite(secs)) return "<td>start an attack</td>";
   const danger = secs > AGE_UNIVERSE_S;
-  return `<td class="${danger ? "safe" : ""}">${fmtDuration(secs)}${danger ? " 🌌" : ""}</td>`;
+  return `<td class="${danger ? "safe" : ""}">${fmtDuration(secs)}</td>`;
 };
 
-function hue(id) {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return h;
-}
-const color = (id, l = 60) => `hsl(${hue(id)} 75% ${l}%)`;
+// Validated dark-mode categorical palette (fixed order; see dataviz palette check in BRAIN.md).
+const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9", "#e66767"];
+const INK = { primary: "#eceef2", secondary: "#a7adba", muted: "#7c8394", grid: "#23262e", surface: "#16181d" };
+const workerSlot = new Map(); // worker id -> palette slot, in the order workers first appear
+const color = (id) => {
+  if (!workerSlot.has(id)) workerSlot.set(id, workerSlot.size % SERIES.length);
+  return SERIES[workerSlot.get(id)];
+};
+const chip = (kind, text) => `<span class="chip ${kind}">${text}</span>`;
+const BROKEN = chip("broken", "Attack succeeded");
+const HELD = chip("held", "Defence held");
+const verdict = (ok, good, bad) => (ok ? chip("ok", "Verified") + " " + good : chip("warn", "Mismatch") + " " + bad);
 const hexToAscii = (h) => h.match(/../g).map((b) => String.fromCharCode(parseInt(b, 16))).join("");
 
 // ================================================================ tabs
@@ -104,10 +110,24 @@ document.querySelectorAll(".start").forEach((b) =>
 document.querySelectorAll(".cancel").forEach((b) => b.addEventListener("click", () => post("/api/jobs/cancel")));
 
 // ================================================================ charts
-const axis = { ticks: { color: "#8a96ad", maxTicksLimit: 6 }, grid: { color: "#1c2538" } };
+Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = INK.secondary;
+Chart.defaults.borderColor = INK.grid;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyleWidth = 10;
+Chart.defaults.plugins.legend.labels.boxHeight = 7;
+Chart.defaults.plugins.tooltip.backgroundColor = "#0b0c0f";
+Chart.defaults.plugins.tooltip.borderColor = "#2c3039";
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.titleFont = { weight: "600" };
+Chart.defaults.elements.bar.borderRadius = 3;
+const axis = { ticks: { color: INK.muted, maxTicksLimit: 6 }, grid: { color: INK.grid }, border: { display: false } };
+const hexA = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
 const speedChart = new Chart($("speed-chart"), {
   type: "line",
-  data: { labels: [], datasets: [{ data: [], borderColor: "#36d399", backgroundColor: "rgba(54,211,153,.12)", fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+  data: { labels: [], datasets: [{ data: [], borderColor: SERIES[0], backgroundColor: hexA(SERIES[0], 0.14), fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
   options: {
     animation: false, maintainAspectRatio: false,
     plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtNum(c.parsed.y) + " ops/s" } } },
@@ -120,18 +140,18 @@ const raceChart = new Chart($("race-chart"), {
   data: {
     labels: [],
     datasets: [
-      { label: "Meet-in-the-middle", data: [], borderColor: "#36d399", pointRadius: 0, borderWidth: 2, tension: 0.2 },
-      { label: "Naive brute force (same speed)", data: [], borderColor: "#f0616d", pointRadius: 0, borderWidth: 2, tension: 0.2 },
+      { label: "Meet-in-the-middle", data: [], borderColor: SERIES[0], backgroundColor: SERIES[0], pointRadius: 0, borderWidth: 2, tension: 0.2 },
+      { label: "Naive brute force (same speed)", data: [], borderColor: SERIES[1], backgroundColor: SERIES[1], pointRadius: 0, borderWidth: 2, tension: 0.2 },
     ],
   },
   options: {
     animation: false, maintainAspectRatio: false,
     plugins: {
-      legend: { labels: { color: "#e6ebf5", boxWidth: 12 } },
+      legend: { labels: { color: INK.secondary } },
       tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toPrecision(3)}%` } },
     },
     scales: {
-      x: { ...axis, title: { display: true, text: "seconds", color: "#8a96ad" } },
+      x: { ...axis, title: { display: true, text: "seconds", color: INK.muted } },
       y: { ...axis, type: "logarithmic", min: 1e-7, max: 100, ticks: { ...axis.ticks, callback: (v) => ([100, 1, 1e-2, 1e-4, 1e-6].includes(v) ? v + "%" : "") } },
     },
   },
@@ -142,19 +162,19 @@ const bdChart = new Chart($("bd-chart"), {
   type: "scatter",
   data: {
     datasets: [
-      { label: "Theory", data: [], showLine: true, borderColor: "#4f8cff", pointRadius: 0, borderWidth: 2 },
-      { label: "Swarm", data: [], borderColor: "#36d399", backgroundColor: "#36d399", pointRadius: 7, pointStyle: "circle" },
-      { label: "Expected ≈ √(πN)", data: [], showLine: true, borderColor: "#f5b041", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
+      { label: "Theory", data: [], showLine: true, borderColor: SERIES[0], backgroundColor: SERIES[0], pointRadius: 0, borderWidth: 2 },
+      { label: "Swarm", data: [], borderColor: INK.surface, borderWidth: 2, backgroundColor: SERIES[1], pointRadius: 7, pointStyle: "circle" },
+      { label: "Expected ≈ √(πN)", data: [], showLine: true, borderColor: INK.muted, backgroundColor: INK.muted, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
     ],
   },
   options: {
     animation: false, maintainAspectRatio: false,
     plugins: {
-      legend: { labels: { color: "#e6ebf5", boxWidth: 12 } },
+      legend: { labels: { color: INK.secondary } },
       tooltip: { callbacks: { label: (c) => `${fmtNum(c.parsed.x)} hashes → ${(100 * c.parsed.y).toFixed(1)}%` } },
     },
     scales: {
-      x: { ...axis, type: "linear", min: 0, title: { display: true, text: "hashes computed", color: "#8a96ad" }, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } },
+      x: { ...axis, type: "linear", min: 0, title: { display: true, text: "hashes computed", color: INK.muted }, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } },
       y: { ...axis, min: 0, max: 1, ticks: { ...axis.ticks, callback: (v) => Math.round(v * 100) + "%" } },
     },
   },
@@ -186,7 +206,7 @@ function renderBirthdayFix(job) {
     { name: "SHA-256 (full)", bits: 256, fix: true },
   ];
   $("bd-fix-body").innerHTML = rows.map((r) => `<tr class="${r.broken ? "broken" : r.fix ? "fixed" : ""}">
-      <td>${esc(r.name)}${r.broken ? " ⚠️" : r.fix ? " ✅" : ""}</td><td>${r.bits}</td><td>2^${r.bits / 2}</td>
+      <td>${statusDot(r)}${esc(r.name)}</td><td>${r.bits}</td><td>2^${r.bits / 2}</td>
       ${timeCell(Math.sqrt(Math.PI * 2 ** r.bits) / rate)}</tr>`).join("");
 }
 
@@ -207,12 +227,12 @@ function renderLeak(job) {
     const twins = owners[u.hash].filter((x) => x !== u.user);
     const shown = m.scheme === "bcrypt" ? u.hash.slice(0, 29) + "…" : (u.salt ? u.salt.slice(0, 6) + "…:" : "") + u.hash;
     const pwCell = c
-      ? `<td class="cracked">🔓 ${esc(c.password)}</td>`
+      ? `<td class="cracked"><span class="dot-s bad"></span>${esc(c.password)}</td>`
       : job.status === "running"
-        ? '<td class="locked">🔒 ••••••</td>'
-        : `<td class="locked">🔒 not in dictionary${secret ? ` <span class="muted small">(${esc(secret[u.user])})</span>` : ""}</td>`;
+        ? '<td class="locked"><span class="dot-s neutral"></span>••••••</td>'
+        : `<td class="locked"><span class="dot-s good"></span>not in dictionary${secret ? ` <span class="muted small">(${esc(secret[u.user])})</span>` : ""}</td>`;
     return `<tr class="${isNew ? "new" : ""}"><td>${esc(u.user)}</td>
-      <td class="hash mono" title="${esc(u.hash)}">${esc(shown)}${twins.length ? `<span class="dup">⚠ same hash as ${esc(twins.join(", "))}</span>` : ""}</td>${pwCell}</tr>`;
+      <td class="hash mono" title="${esc(u.hash)}">${esc(shown)}${twins.length ? `<span class="dup">same hash as ${esc(twins.join(", "))}</span>` : ""}</td>${pwCell}</tr>`;
   }).join("");
 }
 
@@ -241,9 +261,10 @@ function renderPwFix(job) {
     { name: "bcrypt 12 + random 12-char password", work: "2^71 per user", time: timeCell(t(2 ** 71, bcryptAt(12))), fix: true },
   ];
   $("pw-fix-body").innerHTML = rows.map((r) => `<tr class="${r.broken ? "broken" : r.fix ? "fixed" : ""}">
-    <td>${esc(r.name)}${r.broken ? " ⚠️" : r.fix ? " ✅" : ""}</td><td>${r.work}</td>${r.time}</tr>`).join("");
+    <td>${statusDot(r)}${esc(r.name)}</td><td>${r.work}</td>${r.time}</tr>`).join("");
 }
 
+const statusDot = (r) => `<span class="dot-s ${r.broken ? "bad" : r.fix ? "good" : "neutral"}"></span>`;
 const markAmount = (text, amount, cls) => esc(text).replace(esc(amount), `<mark class="${cls}">${esc(amount)}</mark>`);
 
 let chartJob = null;
@@ -267,11 +288,11 @@ const ATTACK_UI = {
     result: (job) => {
       const ok = job.secret && job.secret.key === job.result.key;
       return `
-        <h2>🔓 Key cracked in ${fmtDuration(job.elapsed)}</h2>
+        <h2>${BROKEN}Key cracked in ${fmtDuration(job.elapsed)}</h2>
         <p class="big">0x${esc(job.result.key)}</p>
         <p class="muted">Found by worker ${workerTag(job.result.worker)} after ${fmtNum(job.tried)} of ${fmtNum(job.total)} keys.
-          ${ok ? "✅ Verified against the real secret key." : "⚠️ Does not match the stored secret."}</p>
-        <p class="muted small">🔒 Fix: use enough key bits. Every extra bit doubles the work; see the table on the right.</p>`;
+          ${verdict(ok, "against the real secret key.", "with the stored secret.")}</p>
+        <p class="fix-note"><span class="fix-label">Fix</span>Use enough key bits. Every extra bit doubles the work; see the table on the right.</p>`;
     },
   },
   mitm: {
@@ -287,13 +308,13 @@ const ATTACK_UI = {
       const ok = s && s.k1 === r.k1 && s.k2 === r.k2;
       const naive = 2 ** (2 * job.meta.bits);
       return `
-        <h2>🔓 Both Double-DES keys recovered in ${fmtDuration(job.elapsed)}</h2>
+        <h2>${BROKEN}Both Double-DES keys recovered in ${fmtDuration(job.elapsed)}</h2>
         <p class="big">k1 = 0x${esc(r.k1)} &nbsp; k2 = 0x${esc(r.k2)}</p>
         <p class="muted">Found by worker ${workerTag(r.worker)} with ${fmtNum(job.tried)} operations instead of
           up to ${fmtNum(naive)} naive tries, <b>${fmtNum(naive / job.tried)}× less work</b>.
           Confirmed with the second plaintext/ciphertext pair.
-          ${ok ? "✅ Matches the real secret keys." : "⚠️ Does not match the stored secret."}</p>
-        <p class="muted small">🔒 Fix: Triple DES. A third encryption pushes meet-in-the-middle back to 2<sup>2n</sup> work.</p>`;
+          ${verdict(ok, "Matches the real secret keys.", "Does not match the stored secret.")}</p>
+        <p class="fix-note"><span class="fix-label">Fix</span>Triple DES. A third encryption pushes meet-in-the-middle back to 2<sup>2n</sup> work.</p>`;
     },
   },
   birthday: {
@@ -306,7 +327,7 @@ const ATTACK_UI = {
     result: (job) => {
       const r = job.result, m = job.meta;
       return `
-        <h2>🔓 Collision found in ${fmtDuration(job.elapsed)}: two contracts, one hash</h2>
+        <h2>${BROKEN}Collision found in ${fmtDuration(job.elapsed)}: two contracts, one hash</h2>
         <div class="contracts">
           <div class="contract ok"><div class="label">Fair contract #${r.legit_index} (Alice signs this)</div>
             <p>${markAmount(r.legit, m.legit_amount, "ok")}</p></div>
@@ -317,7 +338,7 @@ const ATTACK_UI = {
         <p class="muted">Found by worker ${workerTag(r.worker)} after ${fmtNum(job.tried)} hashes, about
           ${(job.tried / m.expected_hashes).toFixed(1)}× the birthday estimate and
           <b>${fmtNum(2 ** m.bits / job.tried)}× fewer</b> than the ${fmtNum(2 ** m.bits)} a naive search would need.</p>
-        <p class="muted small">🔒 Fix: use the full 256-bit SHA-256. Its birthday bound is 2<sup>128</sup>.</p>`;
+        <p class="fix-note"><span class="fix-label">Fix</span>Use the full 256-bit SHA-256. Its birthday bound is 2<sup>128</sup>.</p>`;
     },
   },
   passwords: {
@@ -341,7 +362,7 @@ const ATTACK_UI = {
       <dt>IV</dt><dd>0x${esc(m.blocks[0])}</dd>
       <dt>Ciphertext</dt><dd>${m.n_blocks} blocks · 0x${esc(m.blocks.slice(1).join("").slice(0, 48))}…</dd>
       ${m.mac ? `<dt>HMAC tag</dt><dd>0x${esc(m.mac.slice(0, 32))}…</dd>` : ""}
-      <dt>Key</dt><dd>🔑 unknown, stays inside the server</dd>`,
+      <dt>Key</dt><dd>unknown, stays inside the server</dd>`,
     result: (job) => oracleSummary(job),
     complete: (job) => oracleSummary(job),
   },
@@ -355,7 +376,7 @@ const ATTACK_UI = {
     meta: (m) => `
       <dt>Cipher</dt><dd>${{ caesar: "Caesar", vigenere: "Vigenère", otp: "one-time pad" }[m.cipher]}</dd>
       <dt>Ciphertext</dt><dd>${m.n} letters · ${esc(m.ciphertext.slice(0, 40))}…</dd>
-      <dt>Key</dt><dd>🔑 unknown to the attacker</dd>`,
+      <dt>Key</dt><dd>unknown to the attacker</dd>`,
     result: (job) => classicalSummary(job),
     complete: (job) => classicalSummary(job),
   },
@@ -375,7 +396,7 @@ function oracleSummary(job) {
   const blocks = oracleBytes(job);
   if (blocks.some((b) => b.status === "failed")) {
     return `
-      <h2>🔒 Attack blocked after ${fmtNum(job.tried)} queries</h2>
+      <h2>${HELD}Attack blocked after ${fmtNum(job.tried)} queries</h2>
       <p class="muted">${esc(blocks.find((b) => b.status === "failed").note)}. With Encrypt-then-MAC the server
         rejects every modified token <b>before</b> decrypting it, so there's nothing to learn about the padding.</p>`;
   }
@@ -384,12 +405,12 @@ function oracleSummary(job) {
   const text = String.fromCharCode(...all.slice(0, all.length - pad));
   const ok = job.secret && job.secret.plaintext === text;
   return `
-    <h2>🔓 Token decrypted in ${fmtDuration(job.elapsed)} without the key</h2>
+    <h2>${BROKEN}Token decrypted in ${fmtDuration(job.elapsed)} without the key</h2>
     <div class="plaintext">${esc(text)}</div>
     <p class="muted">${fmtNum(job.tried)} oracle queries for ${all.length} bytes (≈ ${Math.round(job.tried / all.length)} per byte,
       at most 256). Brute-forcing the AES-128 key instead would take ~2<sup>127</sup> tries.
-      ${ok ? "✅ Matches the server's real plaintext." : "⚠️ Does not match the server's plaintext."}</p>
-    <p class="muted small">🔒 Fix: Encrypt-then-MAC or AES-GCM. Switch the server to "Fixed" and run again.</p>`;
+      ${verdict(ok, "Matches the server's real plaintext.", "Does not match the server's plaintext.")}</p>
+    <p class="fix-note"><span class="fix-label">Fix</span>Encrypt-then-MAC or AES-GCM. Switch the server to "Fixed" and run again.</p>`;
 }
 
 function renderOracleGrid(job) {
@@ -403,7 +424,7 @@ function renderOracleGrid(job) {
       const ch = v >= 32 && v < 127 ? String.fromCharCode(v) : "·";
       return `<div class="po-cell ${isPad ? "pad" : "got"}" title="0x${v.toString(16).padStart(2, "0")}">${isPad ? v.toString(16).padStart(2, "0") : esc(ch)}</div>`;
     }).join("");
-    const icon = { done: "✅", failed: "⛔", working: "⏳", waiting: "…" }[b.status] || "";
+    const icon = `<span class="po-status ${esc(b.status)}">${{ done: "done", failed: "blocked", working: "working", waiting: "queued" }[b.status] || ""}</span>`;
     return `<div class="po-row ${b.status}"><span class="bl">block ${i + 1}</span><div class="po-cells">${cells}</div><span>${icon}</span></div>`;
   }).join("");
 }
@@ -440,24 +461,24 @@ function letterFreq(text) {
 const iocChart = new Chart($("ioc-chart"), {
   type: "bar",
   data: { labels: Array.from({ length: 16 }, (_, i) => i + 1), datasets: [
-    { label: "Avg IoC of the columns", data: [], backgroundColor: "#4f8cff" },
-    { label: "English 0.066", data: [], type: "line", borderColor: "#36d399", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
-    { label: "Random 0.038", data: [], type: "line", borderColor: "#f0616d", borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
+    { label: "Avg IoC of the columns", data: [], backgroundColor: SERIES[0] },
+    { label: "English 0.066", data: [], type: "line", borderColor: INK.secondary, backgroundColor: INK.secondary, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
+    { label: "Random 0.038", data: [], type: "line", borderColor: INK.muted, backgroundColor: INK.muted, borderDash: [2, 3], pointRadius: 0, borderWidth: 1.5 },
   ] },
   options: { animation: false, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#e6ebf5", boxWidth: 12 } } },
-    scales: { x: { ...axis, title: { display: true, text: "key length L", color: "#8a96ad" } }, y: { ...axis, min: 0.03, max: 0.08 } } },
+    plugins: { legend: { labels: { color: INK.secondary } } },
+    scales: { x: { ...axis, title: { display: true, text: "key length L", color: INK.muted } }, y: { ...axis, min: 0.03, max: 0.08 } } },
 });
 
 const freqChart = new Chart($("freq-chart"), {
   type: "bar",
   data: { labels: [...ABC], datasets: [
-    { label: "Ciphertext", data: [], backgroundColor: "#f0616d" },
-    { label: "Recovered plaintext", data: [], backgroundColor: "#36d399" },
-    { label: "English", data: [], type: "line", borderColor: "#e6ebf5", pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
+    { label: "Ciphertext", data: [], backgroundColor: SERIES[0] },
+    { label: "Recovered plaintext", data: [], backgroundColor: SERIES[1] },
+    { label: "English", data: [], type: "line", borderColor: INK.primary, backgroundColor: INK.primary, pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
   ] },
   options: { animation: false, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#e6ebf5", boxWidth: 12 } } },
+    plugins: { legend: { labels: { color: INK.secondary } } },
     scales: { x: { ...axis, ticks: { ...axis.ticks, maxTicksLimit: 26 } }, y: { ...axis, beginAtZero: true, ticks: { ...axis.ticks, callback: (v) => v + "%" } } } },
 });
 
@@ -465,7 +486,7 @@ function renderClassical(job) {
   if (!job || job.attack !== "classical") return;
   const st = classicalState(job);
   iocChart.data.datasets[0].data = Array.from({ length: 16 }, (_, i) => st.iocs[i + 1] ?? null);
-  iocChart.data.datasets[0].backgroundColor = Array.from({ length: 16 }, (_, i) => (i + 1 === st.length && st.bestIoc > 0.05 ? "#36d399" : "#4f8cff"));
+  iocChart.data.datasets[0].backgroundColor = Array.from({ length: 16 }, (_, i) => (i + 1 === st.length && st.bestIoc > 0.05 ? SERIES[1] : SERIES[0]));
   iocChart.data.datasets[1].data = Array(16).fill(job.meta.english_ioc);
   iocChart.data.datasets[2].data = Array(16).fill(job.meta.random_ioc);
   iocChart.update();
@@ -479,20 +500,20 @@ function classicalSummary(job) {
   const st = classicalState(job), m = job.meta;
   const cipherText = `<div class="cipherbox">${esc(m.ciphertext.slice(0, 300))}…</div>`;
   if (st.bestIoc < 0.05) {
-    return `<h2>🔒 No pattern to attack: one-time pad holds</h2>
+    return `<h2>${HELD}No pattern to attack: the one-time pad holds</h2>
       <p class="muted">No key length made the columns look like English (best IoC ${st.bestIoc.toFixed(4)} vs 0.066).
         The "recovered" text is meaningless: with a one-time pad, every plaintext of this length is equally likely.</p>${cipherText}`;
   }
   const real = job.secret && job.secret.key && shortestPeriod(job.secret.key);
   const keyHtml = [...st.key].map((c, i) => `<span class="${real && real[i] !== c ? "bad" : ""}">${c}</span>`).join("");
   return `
-    <h2>🔓 ${m.cipher === "caesar" ? "Caesar" : "Vigenère"} key recovered in ${fmtDuration(job.elapsed)}, no brute force</h2>
+    <h2>${BROKEN}${m.cipher === "caesar" ? "Caesar" : "Vigenère"} key recovered in ${fmtDuration(job.elapsed)}, no brute force</h2>
     <p class="keycmp">key = ${keyHtml}</p>
     <div class="plaintext">${esc(st.plain.slice(0, 260))}…</div>
     <p class="muted">Found the key length (${st.length}) from the IoC, then each column with 26 tries:
       ${st.length * 26} trial decryptions in total. Brute force would face 26<sup>${st.length}</sup> = ${fmtNum(26 ** st.length)} keys.
-      ${real ? (real === st.key ? "✅ Matches the real key." : "⚠️ Differs from the real key " + esc(real) + ".") : ""}</p>
-    <p class="muted small">🔒 Fix: a one-time pad (or any modern cipher). Pick "One-time pad" and run again.</p>`;
+      ${real ? verdict(real === st.key, "Matches the real key.", "Differs from the real key " + esc(real) + ".") : ""}</p>
+    <p class="fix-note"><span class="fix-label">Fix</span>A one-time pad (or any modern cipher). Pick "One-time pad" and run again.</p>`;
 }
 
 // ---------------------------------------------------------------- cost to crack
@@ -508,14 +529,14 @@ $("cost-remeasure").addEventListener("click", () => loadBench(true));
 
 function compareCost(usd) {
   if (usd < 0.01) return "less than a cent";
-  if (usd < 5) return "a cup of coffee ☕";
-  if (usd < 100) return "a dinner out 🍽️";
-  if (usd < 2000) return "a laptop 💻";
-  if (usd < 50000) return "a car 🚗";
-  if (usd < 1e6) return "a house 🏠";
-  if (usd < 1e9) return "a stadium 🏟️";
-  if (usd < 1e14) return "a country's yearly GDP 🌍";
-  return `${sci(usd / 1e14)} × world GDP 🌌`;
+  if (usd < 5) return "a cup of coffee";
+  if (usd < 100) return "a dinner out";
+  if (usd < 2000) return "a laptop";
+  if (usd < 50000) return "a car";
+  if (usd < 1e6) return "a house";
+  if (usd < 1e9) return "a stadium";
+  if (usd < 1e14) return "a country's yearly GDP";
+  return `${sci(usd / 1e14)} × world GDP`;
 }
 
 const fmtUsd = (x) => (x < 0.01 ? "< $0.01" : x < 1e6 ? "$" + x.toLocaleString(undefined, { maximumFractionDigits: x < 100 ? 2 : 0 }) : x < 1e15 ? "$" + fmtNum(x) : "$" + sci(x));
@@ -549,7 +570,7 @@ function renderCost() {
   });
   $("cost-body").innerHTML = rows.map((t) => `<tr class="${t.usd < 2000 ? "cheap" : t.usd > 1e14 ? "costly" : ""}">
       <td>${esc(t.name)}</td><td>${fmtNum(t.work)} ${t.unit}</td><td>${fmtNum(t.perVcpu)}/s</td>
-      <td class="${t.secs > AGE ? "safe" : ""}">${fmtDuration(t.secs)}${t.secs > AGE ? " 🌌" : ""}</td>
+      <td class="${t.secs > AGE ? "safe" : ""}">${fmtDuration(t.secs)}</td>
       <td class="money">${fmtUsd(t.usd)}</td><td>${compareCost(t.usd)}</td></tr>`).join("");
 
   const d = rows[1], a = rows[3];
@@ -560,7 +581,7 @@ function renderCost() {
     ? `DES speed measured from your swarm (job ${esc(sw.job)}: ${fmtNum(sw.rate)} keys/s with ${sw.workers} workers on ${sw.vcpus} vCPUs). `
     : "DES speed: 1-core benchmark (run a brute-force attack to use your swarm's real speed). ")
     + `Other speeds: 1-core benchmark of the same Python code the workers run.`
-    + (bench.busy ? " ⚠️ Measured while an attack was running, so speeds may be too low. Re-measure when idle." : "")
+    + (bench.busy ? " Warning: measured while an attack was running, so speeds may be too low. Re-measure when idle." : "")
     + ($("cost-speed").value === "rust" ? ` The Rust speedup (${rustSpeedup()?.toFixed(0)}×) was measured on DES and is applied to every row as an estimate.` : "");
 }
 
@@ -573,15 +594,15 @@ let lastHistoryJob = null;
 const scaleChart = new Chart($("scale-chart"), {
   type: "scatter",
   data: { datasets: [
-    { label: "Each run (avg while n workers busy)", data: [], backgroundColor: "rgba(79,140,255,.7)", pointRadius: 5 },
-    { label: "Average", data: [], showLine: true, borderColor: "#36d399", backgroundColor: "#36d399", pointRadius: 4, borderWidth: 2 },
+    { label: "Each run (avg while n workers busy)", data: [], backgroundColor: hexA(SERIES[0], 0.55), pointRadius: 5 },
+    { label: "Average", data: [], showLine: true, borderColor: SERIES[1], backgroundColor: SERIES[1], pointRadius: 4, borderWidth: 2 },
   ] },
   options: { animation: false, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: "#e6ebf5", boxWidth: 12 } },
+    plugins: { legend: { labels: { color: INK.secondary } },
       tooltip: { callbacks: { label: (c) => `${c.parsed.x} workers: ${fmtNum(c.parsed.y)} keys/s` } } },
     scales: {
-      x: { ...axis, type: "linear", min: 0, title: { display: true, text: "workers", color: "#8a96ad" }, ticks: { ...axis.ticks, stepSize: 1 } },
-      y: { ...axis, beginAtZero: true, title: { display: true, text: "keys / second", color: "#8a96ad" }, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } },
+      x: { ...axis, type: "linear", min: 0, title: { display: true, text: "workers", color: INK.muted }, ticks: { ...axis.ticks, stepSize: 1 } },
+      y: { ...axis, beginAtZero: true, title: { display: true, text: "keys / second", color: INK.muted }, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } },
     } },
 });
 
@@ -680,7 +701,7 @@ function renderLangCompare() {
   const max = Math.max(...langs.map((l) => langRates[l].rate));
   const x = rustSpeedup();
   $("lang-compare").innerHTML = langs.map((l) => `
-    <div class="lang-row ${l}"><span>${l === "rust" ? "🦀 Rust" : "🐍 Python"}</span>
+    <div class="lang-row ${l}"><span>${l === "rust" ? "Rust" : "Python"}</span>
       <div class="track"><div class="fill" style="width:${Math.max(1, (100 * langRates[l].rate) / max)}%"></div></div>
       <span class="lnum">${fmtNum(langRates[l].rate)}/s</span></div>`).join("")
     + (x ? `<p class="lang-verdict">Rust is <b>${x.toFixed(0)}× faster</b> per worker with the same CPU share
@@ -702,12 +723,12 @@ function passwordsSummary(job) {
     bcrypt: "bcrypt makes every guess expensive. Only the most obvious passwords fall in reasonable time.",
   }[m.scheme];
   return `
-    <h2>${n ? "🔓" : "🔒"} Cracked ${n} of ${m.users.length} accounts in ${fmtDuration(job.elapsed)} (${esc(schemeLabel(m))})</h2>
+    <h2>${n ? BROKEN : HELD}Cracked ${n} of ${m.users.length} accounts in ${fmtDuration(job.elapsed)} (${esc(schemeLabel(m))})</h2>
     <p class="muted">${lesson} The random passwords were never in the dictionary, so they survived even MD5.</p>
-    <p class="muted small">🔒 Fix: salt + a slow hash (bcrypt / scrypt / Argon2) <b>and</b> long random passwords.</p>`;
+    <p class="fix-note"><span class="fix-label">Fix</span>Salt + a slow hash (bcrypt / scrypt / Argon2) <b>and</b> long random passwords.</p>`;
 }
 
-const workerTag = (wid) => `<b style="color:${color(wid)}">${esc(wid)}</b>`;
+const workerTag = (wid) => `<span class="dot-s" style="background:${color(wid)}"></span><b>${esc(wid)}</b>`;
 
 // ================================================================ render
 let smoothRate = 0;
@@ -748,6 +769,7 @@ function render(s) {
   if (activeTab === "birthday") renderBirthdayChart(job);
   renderEvents(s.events);
   if (job && job.status === "running") updateCharts(job, s);
+  $("speed-empty").classList.toggle("hidden", speedChart.data.labels.length > 0);
   const histKey = job ? job.id + job.status : null;
   if (activeTab === "history" && histKey !== lastHistoryJob) {
     lastHistoryJob = histKey;
@@ -783,7 +805,7 @@ function renderJob(job) {
 
   const otherTab = job.attack !== activeTab;
   $("job-meta").innerHTML = otherTab
-    ? `<dt>Last job</dt><dd>${esc(job.title)} (${esc(job.status)}). Open its tab to see details, or press Start here.</dd>`
+    ? `<dt>Last job</dt><dd>${esc(job.title)} (${esc((ui.statusLabel && ui.statusLabel[job.status]) || job.status)}). Open its tab to see details, or press Start here.</dd>`
     : `<dt>Job</dt><dd>${esc(job.id)} · ${esc(job.title)}</dd>` + ui.meta(job.meta);
 
   renderHeatmap(job);
@@ -860,14 +882,16 @@ function renderWorkers(s) {
 
   const grid = $("worker-grid");
   if (!s.workers.length && !dead.length) {
-    grid.innerHTML = '<span class="empty">No workers online. Run: docker compose up -d --scale worker=4</span>';
+    grid.innerHTML = `<div class="grid-empty"><p class="empty">No workers online.</p>
+      <p class="small">Docker: <code>docker compose up -d --scale worker=4</code>. Kubernetes: worker pods start
+        automatically when an attack begins and stop about 20 s after it ends.</p></div>`;
     return;
   }
   const card = (w, isDead) => `
     <div class="wcard ${isDead ? "dead" : w.status}" data-lang="${esc(w.lang)}" style="--c:${color(w.id)}">
       <div class="wid">${esc(w.id)}</div>
       <div class="lang">${esc(w.lang)}${w.cpus ? " · " + w.cpus + " cpu" : ""}</div>
-      <div class="wrate">${isDead ? "💀 offline" : fmtNum(w.rate) + "/s"}</div>
+      <div class="wrate">${isDead ? "offline" : fmtNum(w.rate) + "/s"}</div>
       <div class="muted">${isDead ? "chunk requeued" : w.status === "working" ? "chunk #" + w.chunk : "idle"} · ${w.chunks_done} done</div>
     </div>`;
   grid.innerHTML = s.workers.map((w) => card(w, false)).join("") + dead.map((x) => card(x.worker, true)).join("");
@@ -898,7 +922,7 @@ function renderMitmFix(job) {
     { name: "Real 3DES (3 × 56)", attack: "meet-in-the-middle", exp: 112, fix: true },
   ];
   $("mitm-fix-body").innerHTML = rows.map((r) => `<tr class="${r.broken ? "broken" : r.fix ? "fixed" : ""}">
-      <td>${esc(r.name)}${r.broken ? " ⚠️" : r.fix ? " ✅" : ""}</td><td>${r.attack}</td><td>2^${r.exp}</td>${timeCell(2 ** r.exp / rate)}</tr>`).join("");
+      <td>${statusDot(r)}${esc(r.name)}</td><td>${r.attack}</td><td>2^${r.exp}</td>${timeCell(2 ** r.exp / rate)}</tr>`).join("");
 }
 
 function renderEvents(events) {
@@ -919,6 +943,21 @@ function connect() {
     setTimeout(connect, 1000);
   };
 }
+// Presenter mode: larger type for the projector (button or the P key), remembered across reloads
+function setPresenter(on) {
+  document.body.classList.toggle("presenter", on);
+  $("presenter").classList.toggle("active", on);
+  localStorage.setItem("cs-presenter", on ? "1" : "");
+  setTimeout(() => Object.values(Chart.instances).forEach((c) => c.resize()), 50);
+}
+$("presenter").addEventListener("click", () => setPresenter(!document.body.classList.contains("presenter")));
+document.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "p" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    setPresenter(!document.body.classList.contains("presenter"));
+  }
+});
+setPresenter(localStorage.getItem("cs-presenter") === "1");
+
 updateSliders();
 // Open a tab straight from the URL, e.g. http://localhost:8090/#cost or #mitm
 const fromHash = location.hash.slice(1);

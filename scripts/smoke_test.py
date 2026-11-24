@@ -21,17 +21,16 @@ def call(method: str, path: str, body: dict | None = None):
 
 
 def wait_ready(timeout: float = 90) -> int:
+    """Wait for the coordinator. Workers may be 0: under Kubernetes the autoscaler adds them when work arrives."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             call("GET", "/api/health")
-            workers = len(call("GET", "/api/state")["workers"])
-            if workers:
-                return workers
+            time.sleep(3)  # give already-running workers a heartbeat to register
+            return len(call("GET", "/api/state")["workers"])
         except OSError:
-            pass
-        time.sleep(2)
-    raise SystemExit("stack not ready: no healthy coordinator or no workers")
+            time.sleep(2)
+    raise SystemExit("stack not ready: coordinator not healthy")
 
 
 def run(attack: str, params: dict, timeout: float = 180) -> dict:
@@ -98,16 +97,17 @@ CASES = [
 
 
 def main() -> int:
-    print(f"stack ready with {wait_ready()} worker(s) at {BASE}")
+    n = wait_ready()
+    print(f"stack ready at {BASE} with {n} worker(s)" + ("; waiting for the autoscaler to add some" if not n else ""))
     failures = 0
     for attack, params, check in CASES:
         start = time.time()
         try:
             check(run(attack, params))
-            print(f"  ✅ {attack:15} {json.dumps(params):40} {time.time() - start:6.1f}s")
+            print(f"  PASS {attack:15} {json.dumps(params):40} {time.time() - start:6.1f}s")
         except AssertionError as exc:
             failures += 1
-            print(f"  ❌ {attack:15} {json.dumps(params):40} {exc}")
+            print(f"  FAIL {attack:15} {json.dumps(params):40} {exc}")
     history = call("GET", "/api/history?limit=20")
     print(f"history has {len(history)} recent runs")
     return 1 if failures else 0

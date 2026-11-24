@@ -76,12 +76,14 @@ services:
     image: ${REGISTRY:-cryptoswarm}/oracle:${TAG:-local}
 
   dashboard:
-    image: nginx:1.27-alpine
-    volumes:
-      - ./dashboard:/usr/share/nginx/html:ro
-      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+      labels:
+        org.opencontainers.image.source: ${IMAGE_SOURCE:-https://github.com/Ehtasham-Arif01/cryptoswarm-attack-lab}
+    image: ${REGISTRY:-cryptoswarm}/dashboard:${TAG:-local}
     ports:
-      - "${DASHBOARD_PORT:-8090}:80"
+      - "${DASHBOARD_PORT:-8090}:8080"
     depends_on: [coordinator]
 
 volumes:

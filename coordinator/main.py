@@ -90,7 +90,7 @@ async def reaper() -> None:
                     chunks = await requeue_processing(wid)
                     if chunks:
                         await event(
-                            f"💀 Worker {wid} died mid-chunk. Requeued chunk(s) {', '.join(chunks)}", "error"
+                            f"Worker {wid} died mid-chunk. Requeued chunk(s) {', '.join(chunks)}", "error"
                         )
             known = alive
             await track_job_workers()
@@ -295,7 +295,7 @@ async def create_job(req: JobRequest):
     for i, phase in enumerate(plan.phases[1:], start=1):  # later phases wait until the previous one ends
         pipe.rpush(K.job_phase(jid, i), *[task(c) for c in phase])
     await pipe.execute()
-    await event(f"▶ Job {jid} started. {plan.summary}")
+    await event(f"Job {jid} started. {plan.summary}")
     return {"id": jid}
 
 
@@ -338,6 +338,22 @@ async def get_benchmark(refresh: bool = False):
             await r.set(BENCH_KEY, json.dumps(bench), ex=BENCH_TTL)
     bench["swarm"] = await last_bruteforce_run()
     return bench
+
+
+@app.get("/api/scaling")
+async def scaling():
+    """Work waiting for workers, for the Kubernetes autoscaler (KEDA metrics-api trigger).
+
+    Queued chunks + chunks being processed: the queue alone empties as soon as every chunk is *taken*,
+    which would scale workers down while they're still busy.
+    """
+    queued = await r.llen(K.QUEUE)
+    in_progress = 0
+    async for plist in r.scan_iter(K.processing("*")):
+        in_progress += await r.llen(plist)
+    jid = await r.get(K.CURRENT_JOB)
+    running = bool(jid) and await r.hget(K.job(jid), "status") == "running"
+    return {"pending": queued + in_progress if running else 0, "queued": queued, "in_progress": in_progress}
 
 
 @app.get("/api/history")

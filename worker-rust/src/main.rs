@@ -287,14 +287,14 @@ impl Worker {
                 .invoke(&mut self.con)?;
             if won == 1 {
                 push_event(&mut self.con,
-                    &format!("🔓 Worker {} (rust) cracked job {jid}! key = 0x{}", self.id, hex_encode(&key)),
+                    &format!("Worker {} (rust) cracked job {jid}: key = 0x{}", self.id, hex_encode(&key)),
                     "success")?;
             }
         } else if n_done >= total_chunks {
             let won: i64 = self.finish.key(key_job(jid)).arg("exhausted").arg("{}").arg(now().to_string())
                 .invoke(&mut self.con)?;
             if won == 1 {
-                push_event(&mut self.con, &format!("✔ Job {jid} complete: all {total_chunks} chunks done"), "info")?;
+                push_event(&mut self.con, &format!("Job {jid} complete: all {total_chunks} chunks done"), "info")?;
             }
         }
         Ok(())
@@ -327,12 +327,25 @@ fn heartbeat(url: String, state: Arc<Mutex<State>>, stop: Arc<AtomicBool>) {
     }
 }
 
+/// Docker: 12-char container id. Kubernetes: pod "<deployment>-<replicaset hash>-<suffix>"
+/// becomes "<deployment>-<suffix>" (unique, same rule as the Python worker).
+fn worker_id() -> String {
+    if let Ok(id) = env::var("WORKER_ID") {
+        return id;
+    }
+    let host = env::var("HOSTNAME").unwrap_or_else(|_| format!("rust-{}", std::process::id()));
+    let parts: Vec<&str> = host.split('-').collect();
+    if parts.len() >= 3 {
+        let mut keep: Vec<&str> = parts[..parts.len() - 2].to_vec();
+        keep.push(parts[parts.len() - 1]);
+        return keep.join("-");
+    }
+    host.chars().take(12).collect()
+}
+
 fn main() -> Res<()> {
     let url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379/0".into());
-    let id: String = env::var("WORKER_ID")
-        .or_else(|_| env::var("HOSTNAME"))
-        .unwrap_or_else(|_| format!("rust-{}", std::process::id()))
-        .chars().take(12).collect();
+    let id = worker_id();
     let cpus: f64 = env::var("WORKER_CPUS").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
 
     let stop = Arc::new(AtomicBool::new(false));
