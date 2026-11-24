@@ -1,0 +1,18 @@
+[package]
+name = "cryptoswarm-worker"
+version = "0.1.0"
+edition = "2021"
+description = "Fast CryptoSwarm worker (brute-force DES) speaking the same Redis protocol as the Python worker"
+publish = false
+
+[dependencies]
+des = "0.8"
+redis = { version = "0.27", default-features = false, features = ["script"] }
+serde_json = "1"
+signal-hook = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

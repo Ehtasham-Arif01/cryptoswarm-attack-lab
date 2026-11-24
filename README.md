@@ -18,6 +18,7 @@ Demo commands:
 
 ```bash
 docker compose up -d --scale worker=8         # add workers live
+docker compose up -d --scale worker-rust=4    # add fast Rust workers (brute force, ~40× a Python worker)
 docker compose ps -q worker | head -1 | xargs docker kill   # kill one mid-attack: its chunk is requeued
 docker compose down                           # stop everything
 ```

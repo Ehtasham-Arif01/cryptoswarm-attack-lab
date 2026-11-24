@@ -34,7 +34,7 @@ Dashboard (nginx + JS/Chart.js) ⇄ WebSocket/REST ⇄ Coordinator (FastAPI)
 
 ## 3. Tech stack
 
-Python 3.12 (FastAPI, redis-py, pycryptodome, bcrypt, requests) · JavaScript + Chart.js · Rust (fast worker) ·
+Python 3.12 (FastAPI, redis-py, pycryptodome, bcrypt, requests) · Rust (des, redis) · JavaScript + Chart.js · Rust (fast worker) ·
 Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + Trivy + ruff · SQLite (history).
 
 ## 4. Repo
@@ -117,7 +117,15 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 
 ### Week 4: DevOps + polish
 - ⬜ Kubernetes manifests + HPA autoscaling on queue depth
-- ⬜ Rust worker + Python vs Rust benchmark tab
+- ✅ Rust worker (`worker-rust/`, brute-force DES only). Same Redis protocol as the Python worker (reliable queue,
+  heartbeat with `lang: "rust"`, progress, FINISH Lua, SIGTERM requeue); hands other attacks' chunks back to the queue.
+  Static musl binary on `scratch`, non-root: **1.95 MB image** (Python worker: 257 MB). Crates: des 0.8, redis 0.27,
+  serde_json, signal-hook. `cargo test` checks keys/ciphertexts against vectors from the Python code (runs in docker build).
+  Compose service `worker-rust` has `scale: 0`: start with `docker compose up -d --scale worker-rust=4`.
+  Measured at 0.25 CPU each: Python ≈ 7.5–11.5k keys/s, Rust ≈ 330–470k keys/s → **38–44× per worker**.
+  Fault tolerance checked: killed a Rust worker mid-chunk → requeued → key found + verified.
+  Dashboard: 🦀 Python vs Rust panel (Brute Force tab), orange RUST badge, cost tab option "Our Rust worker (measured)".
+  CI: Rust image built (incl. cargo test), Trivy-scanned, e2e runs with 4 Python + 2 Rust workers, pushed to GHCR.
 - ✅ CI/CD (`.github/workflows/ci.yml`, checked with actionlint): **test** (ruff + pytest + `node --check`),
   **security** (Trivy fs: deps, secrets, Dockerfile misconfig), **e2e** (build → Trivy image scan → stack with
   4 uncapped workers → `scripts/smoke_test.py` runs all 7 attack cases → on main push images to
@@ -157,6 +165,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 ## 7. Notes / gotchas
 - A job's `workers`/`vcpus` = the most seen while it ran (reaper updates them every second).
 - Speedup factors on the cost tab are assumptions, labelled as such. Don't present them as measured.
+- No local Rust toolchain needed: everything builds in Docker (`rust:1-alpine`). First build ≈ 3 min.
 - Run `python3 scripts/smoke_test.py` before a demo: it runs every attack against the live stack (~2 min).
 - After switching containers to non-root, an old `history` volume needs: `docker compose run --rm --no-deps --user root --entrypoint chown coordinator -R 10001:10001 /data`.
 - Padding oracle test sends ~8k requests in-process, so it only decrypts the first + last block (~35 s).

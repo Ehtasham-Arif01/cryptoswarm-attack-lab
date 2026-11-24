@@ -2,7 +2,8 @@
 #
 #   test      lint (ruff) + unit tests + dashboard JS syntax check
 #   security  Trivy scan of the repo: vulnerable dependencies, leaked secrets, Dockerfile misconfigurations
-#   e2e       build images → Trivy image scan → start the stack → run every attack end-to-end
+#   e2e       build images (incl. Rust worker + cargo test) → Trivy image scan → start the stack
+#             with Python + Rust workers → run every attack end-to-end
 #             → on main: push images to GitHub Container Registry (private, like the repo)
 #
 # A HIGH or CRITICAL finding that has a fix available fails the pipeline.
@@ -82,20 +83,20 @@ jobs:
           echo "REGISTRY=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
           echo "IMAGE_SOURCE=https://github.com/${GITHUB_REPOSITORY}" >> "$GITHUB_ENV"
 
-      - name: Build images
+      - name: Build images (the Rust image runs `cargo test` while building)
         run: docker compose build
 
       - name: Trivy image scan (OS packages + Python packages inside the images)
         run: |
-          for svc in coordinator worker oracle; do
+          for svc in coordinator worker worker-rust oracle; do
             echo "::group::Trivy: $svc"
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
               --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$REGISTRY/$svc:$TAG"
             echo "::endgroup::"
           done
 
-      - name: Start the stack (4 workers)
-        run: docker compose up -d --scale worker=4
+      - name: Start the stack (4 Python + 2 Rust workers)
+        run: docker compose up -d --scale worker=4 --scale worker-rust=2
 
       - name: End-to-end attacks (smoke test)
         run: python3 scripts/smoke_test.py http://localhost:8090
@@ -119,10 +120,10 @@ jobs:
       - name: Push images (commit SHA + latest)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          for svc in coordinator worker oracle; do
+          for svc in coordinator worker worker-rust oracle; do
             docker push "$REGISTRY/$svc:$TAG"
             docker tag "$REGISTRY/$svc:$TAG" "$REGISTRY/$svc:latest"
             docker push "$REGISTRY/$svc:latest"
           done
           echo "### 📦 Images pushed" >> "$GITHUB_STEP_SUMMARY"
-          for svc in coordinator worker oracle; do echo "- \`$REGISTRY/$svc:$TAG\`" >> "$GITHUB_STEP_SUMMARY"; done
+          for svc in coordinator worker worker-rust oracle; do echo "- \`$REGISTRY/$svc:$TAG\`" >> "$GITHUB_STEP_SUMMARY"; done

@@ -524,7 +524,7 @@ function renderCost() {
   const r = bench.rates, sw = bench.swarm;
   const price = Math.max(0.0001, Number($("cost-price").value) || 0.045);
   const fleet = Math.round(10 ** Number($("cost-fleet").value));
-  const speed = Number($("cost-speed").value);
+  const speed = $("cost-speed").value === "rust" ? rustSpeedup() || 1 : Number($("cost-speed").value);
   const bits = Number($("bf-bits").value);
   $("cost-fleet-out").textContent = fleet.toLocaleString();
   const des = sw && sw.per_vcpu ? sw.per_vcpu : r.des;
@@ -560,7 +560,8 @@ function renderCost() {
     ? `DES speed measured from your swarm (job ${esc(sw.job)}: ${fmtNum(sw.rate)} keys/s with ${sw.workers} workers on ${sw.vcpus} vCPUs). `
     : "DES speed: 1-core benchmark (run a brute-force attack to use your swarm's real speed). ")
     + `Other speeds: 1-core benchmark of the same Python code the workers run.`
-    + (bench.busy ? " ⚠️ Measured while an attack was running, so speeds may be too low. Re-measure when idle." : "");
+    + (bench.busy ? " ⚠️ Measured while an attack was running, so speeds may be too low. Re-measure when idle." : "")
+    + ($("cost-speed").value === "rust" ? ` The Rust speedup (${rustSpeedup()?.toFixed(0)}×) was measured on DES and is applied to every row as an estimate.` : "");
 }
 
 // ---------------------------------------------------------------- history
@@ -651,6 +652,46 @@ function renderHistory() {
       : "Add a run with 1 worker to compare against.";
 }
 
+// ---------------------------------------------------------------- python vs rust
+// Average keys/s per busy worker, by language, measured live during brute-force jobs (kept across reloads).
+const langRates = JSON.parse(localStorage.getItem("cs-lang-rates") || "{}");
+
+function updateLangRates(s) {
+  if (!s.job || s.job.attack !== "bruteforce" || s.job.status !== "running") return;
+  const now = {};
+  for (const w of s.workers) {
+    if (w.status !== "working" || w.rate <= 0) continue;
+    (now[w.lang] = now[w.lang] || []).push(w.rate);
+  }
+  for (const [lang, rates] of Object.entries(now)) {
+    const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+    const cpus = s.workers.find((w) => w.lang === lang)?.cpus || 0;
+    const old = langRates[lang];
+    langRates[lang] = { rate: old ? old.rate * 0.8 + avg * 0.2 : avg, cpus, t: Date.now() };
+  }
+  localStorage.setItem("cs-lang-rates", JSON.stringify(langRates));
+}
+
+const rustSpeedup = () => (langRates.python && langRates.rust ? langRates.rust.rate / langRates.python.rate : null);
+
+function renderLangCompare() {
+  const langs = ["python", "rust"].filter((l) => langRates[l]);
+  if (!langs.length) return;
+  const max = Math.max(...langs.map((l) => langRates[l].rate));
+  const x = rustSpeedup();
+  $("lang-compare").innerHTML = langs.map((l) => `
+    <div class="lang-row ${l}"><span>${l === "rust" ? "🦀 Rust" : "🐍 Python"}</span>
+      <div class="track"><div class="fill" style="width:${Math.max(1, (100 * langRates[l].rate) / max)}%"></div></div>
+      <span class="lnum">${fmtNum(langRates[l].rate)}/s</span></div>`).join("")
+    + (x ? `<p class="lang-verdict">Rust is <b>${x.toFixed(0)}× faster</b> per worker with the same CPU share
+      (${langRates.rust.cpus || "no limit"} CPU each). Same algorithm and protocol, compiled code instead of an interpreter.</p>` : "");
+  const opt = $("cost-rust-opt");
+  if (x && opt.disabled) {
+    opt.disabled = false;
+    opt.textContent = `Our Rust worker (measured: ${x.toFixed(0)}× Python)`;
+  }
+}
+
 const schemeLabel = (m) => ({ md5: "MD5, no salt", md5_salted: "MD5 + per-user salt", bcrypt: `bcrypt, cost ${m.cost}` }[m.scheme]);
 
 function passwordsSummary(job) {
@@ -702,6 +743,8 @@ function render(s) {
   renderPwFix(job);
   renderOracleGrid(job);
   renderClassical(job);
+  updateLangRates(s);
+  renderLangCompare();
   if (activeTab === "birthday") renderBirthdayChart(job);
   renderEvents(s.events);
   if (job && job.status === "running") updateCharts(job, s);
@@ -821,7 +864,7 @@ function renderWorkers(s) {
     return;
   }
   const card = (w, isDead) => `
-    <div class="wcard ${isDead ? "dead" : w.status}" style="--c:${color(w.id)}">
+    <div class="wcard ${isDead ? "dead" : w.status}" data-lang="${esc(w.lang)}" style="--c:${color(w.id)}">
       <div class="wid">${esc(w.id)}</div>
       <div class="lang">${esc(w.lang)}${w.cpus ? " · " + w.cpus + " cpu" : ""}</div>
       <div class="wrate">${isDead ? "💀 offline" : fmtNum(w.rate) + "/s"}</div>

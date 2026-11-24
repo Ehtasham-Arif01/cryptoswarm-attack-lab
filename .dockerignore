@@ -4,3 +4,4 @@
 dashboard
 tests
 *.md
+worker-rust/target

@@ -47,6 +47,24 @@ services:
     # (2 cores / 0.25 = 8 workers). Set WORKER_CPUS=0 to remove the limit.
     cpus: ${WORKER_CPUS:-0.25}
 
+  # Fast worker written in Rust (brute-force DES only). Not started by default:
+  #   docker compose up -d --scale worker-rust=1
+  worker-rust:
+    build:
+      context: .
+      dockerfile: worker-rust/Dockerfile
+      labels:
+        org.opencontainers.image.source: ${IMAGE_SOURCE:-https://github.com/Ehtasham-Arif01/cryptoswarm-attack-lab}
+    image: ${REGISTRY:-cryptoswarm}/worker-rust:${TAG:-local}
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      WORKER_CPUS: ${WORKER_CPUS:-0.25}
+    depends_on:
+      redis: { condition: service_healthy }
+    stop_grace_period: 5s
+    cpus: ${WORKER_CPUS:-0.25}  # same CPU share as a Python worker: a fair comparison
+    scale: 0
+
   # The deliberately vulnerable web server for the padding-oracle attack.
   # It is the "victim": not CPU-capped, not reachable from the host.
   oracle:
