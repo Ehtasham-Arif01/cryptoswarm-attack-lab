@@ -84,7 +84,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Dashboard: leaked-table view with "same hash as…" warnings, cracked passwords, fix table using measured speed.
 - ✅ Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ✅ (full-hash table), passwords ✅ (salt/bcrypt/strong-password table)
 
-### Week 3: Advanced attacks + platform features
+### Week 3: Advanced attacks + platform features (all 6 attacks done 2026-11-24)
 - ✅ Attack 5: Padding oracle on AES-CBC (`swarm/attacks/padding_oracle.py` + `oracle/server.py` container).
   Oracle = vulnerable FastAPI server (key never leaves it): `500 padding error` vs `400`/`200`. Fixed mode =
   Encrypt-then-MAC (HMAC-SHA256 over IV‖C checked first, constant time → always `403`).
@@ -93,7 +93,12 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Live per-block progress in `swarm:job:<id>:live`. Measured (8 workers): vulnerable 6/6 blocks in 24–29 s,
   ~11.7k queries (~122/byte); fixed: blocked after 24 queries.
   Dashboard: live block grid (right to left, padding shown as hex), decrypted token, Encrypt-then-MAC explanation.
-- ⬜ Attack 6: Classical cipher breaker (Caesar/Vigenère frequency analysis)
+- ✅ Attack 6: Classical ciphers (`swarm/attacks/classical.py`): Caesar / Vigenère (key length 2–10) / one-time pad
+  on an original 809-letter text. Phase 1: one chunk per key length 1–16 (average IoC of the columns).
+  Phase 2: one chunk per column, Caesar by chi-squared. Key length rule = smallest L with IoC ≥ 90% of the best
+  (a fixed 0.055 threshold failed: half of a 10-letter key already scores 0.056). Checked: 300/300 lengths,
+  500/500 full keys correct. Swarm runtime ≈ 50–150 ms. OTP: best IoC ≈ 0.040 → "no pattern".
+  Dashboard: IoC-per-length chart (peaks at L, 2L), letter frequency chart (cipher vs recovered vs English), fix table.
 - ⬜ Fault-tolerance demo polish (dead worker tile turns red, requeue shown in event log)
 - ⬜ Cost-to-crack calculator (keys/s → AWS $ for DES vs AES)
 - ⬜ Attack history (SQLite) + PDF report export

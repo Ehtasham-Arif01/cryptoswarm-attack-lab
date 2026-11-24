@@ -29,7 +29,7 @@
     <button class="tab" data-tab="birthday">3 · Birthday Attack</button>
     <button class="tab" data-tab="passwords">4 · Passwords</button>
     <button class="tab" data-tab="padding_oracle">5 · Padding Oracle</button>
-    <button class="tab" disabled title="Week 3">6 · Classical Ciphers</button>
+    <button class="tab" data-tab="classical">6 · Classical Ciphers</button>
   </nav>
 
   <main class="layout">
@@ -151,6 +151,37 @@
           <button class="btn cancel">■ Cancel</button>
         </div>
       </div>
+
+      <div class="panel hidden" data-panel="classical">
+        <h2>Frequency analysis: breaking classical ciphers</h2>
+        <p class="muted">
+          English isn't random: <b>E</b> is 12.7% of letters, <b>Z</b> only 0.07%. Caesar and Vigenère keep that
+          fingerprint, so the swarm never needs to brute-force the key:
+        </p>
+        <div class="story">
+          <div><b>1. Key length:</b> for L = 1…16, split the text into L columns and measure the
+            <i>index of coincidence</i>. English ≈ 0.066, random ≈ 0.038. One worker per L.</div>
+          <div><b>2. Columns:</b> each column is a Caesar cipher. Try 26 shifts and keep the one whose letters
+            match English best (χ²). One worker per column.</div>
+        </div>
+        <label class="slider">
+          <span>Cipher</span>
+          <select id="cl-cipher" data-param="cipher" class="select">
+            <option value="caesar">Caesar: one shift for every letter</option>
+            <option value="vigenere" selected>Vigenère: repeating key</option>
+            <option value="otp">One-time pad: random key as long as the message</option>
+          </select>
+        </label>
+        <label class="slider" id="cl-len-row">
+          <span>Vigenère key length: <b class="bits-out" data-for="cl-len">6</b> letters
+            (26<sup id="cl-len-sup">6</sup> = <span id="cl-space">309 M</span> possible keys)</span>
+          <input id="cl-len" data-param="key_len" type="range" min="2" max="10" value="6" />
+        </label>
+        <div class="buttons">
+          <button class="btn primary start" data-attack="classical" data-inputs="cl-cipher,cl-len">▶ Start attack</button>
+          <button class="btn cancel">■ Cancel</button>
+        </div>
+      </div>
       <dl class="kv" id="job-meta"></dl>
     </section>
 
@@ -245,6 +276,25 @@
         <b>before</b> decrypting (in constant time). Any tampered token gets the same <code>403 invalid session</code>
         and is never decrypted, so there's no oracle. Authenticated modes such as <b>AES-GCM</b> give the same
         protection. TLS 1.3 removed CBC for this reason (POODLE, Lucky13).</p>
+    </section>
+
+    <section class="card side panel hidden" data-panel="classical">
+      <h2>📊 Step 1: index of coincidence per key length</h2>
+      <div class="chart-box small-chart"><canvas id="ioc-chart"></canvas></div>
+      <h2 class="mt">🔤 Letter frequencies</h2>
+      <div class="chart-box small-chart"><canvas id="freq-chart"></canvas></div>
+      <h2 class="mt">🔒 Fix: one-time pad or a modern cipher</h2>
+      <table class="reality-table">
+        <thead><tr><th>Cipher</th><th>Keys</th><th>Frequency analysis</th></tr></thead>
+        <tbody>
+          <tr class="broken"><td>Caesar ⚠️</td><td>25</td><td>instant (even brute force is instant)</td></tr>
+          <tr class="broken"><td>Vigenère ⚠️</td><td>26<sup>L</sup></td><td>milliseconds: L found from IoC, then 26 tries per column</td></tr>
+          <tr class="fixed"><td>One-time pad ✅</td><td>26<sup>n</sup></td><td>nothing to find: every plaintext is equally likely</td></tr>
+          <tr class="fixed"><td>AES-128 ✅</td><td>2<sup>128</sup></td><td>output looks random, so no statistics leak</td></tr>
+        </tbody>
+      </table>
+      <p class="muted small">A one-time pad is perfectly secret but impractical: the key must be truly random, as long as the
+        message, and never reused. Modern ciphers get the same "no patterns" property with a short key.</p>
     </section>
 
     <!-- ================= Events ================= -->
