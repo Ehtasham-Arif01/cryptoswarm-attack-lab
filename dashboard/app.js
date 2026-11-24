@@ -5,6 +5,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 // ================================================================ formatting
 function fmtNum(n) {
+  if (n >= 1e15) return sci(n);
   if (n >= 1e12) return (n / 1e12).toFixed(2) + " T";
   if (n >= 1e9) return (n / 1e9).toFixed(2) + " G";
   if (n >= 1e6) return (n / 1e6).toFixed(2) + " M";
@@ -53,8 +54,10 @@ let autoTabbedJob = null;
 
 function showTab(name) {
   activeTab = name;
+  document.body.dataset.tab = name;
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
+  if (name === "cost" && !bench) loadBench(false);
   if (lastState) render(lastState);
 }
 document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
@@ -485,6 +488,74 @@ function classicalSummary(job) {
     <p class="muted small">🔒 Fix: a one-time pad (or any modern cipher). Pick "One-time pad" and run again.</p>`;
 }
 
+// ---------------------------------------------------------------- cost to crack
+let bench = null;
+
+async function loadBench(refresh) {
+  $("cost-body").innerHTML = '<tr><td colspan="6" class="muted">Measuring speeds (≈2 s)…</td></tr>';
+  bench = await (await fetch("/api/benchmark" + (refresh ? "?refresh=true" : ""))).json();
+  renderCost();
+}
+$("cost-remeasure").addEventListener("click", () => loadBench(true));
+["cost-price", "cost-fleet", "cost-speed", "bf-bits"].forEach((id) => $(id).addEventListener("input", () => bench && renderCost()));
+
+function compareCost(usd) {
+  if (usd < 0.01) return "less than a cent";
+  if (usd < 5) return "a cup of coffee ☕";
+  if (usd < 100) return "a dinner out 🍽️";
+  if (usd < 2000) return "a laptop 💻";
+  if (usd < 50000) return "a car 🚗";
+  if (usd < 1e6) return "a house 🏠";
+  if (usd < 1e9) return "a stadium 🏟️";
+  if (usd < 1e14) return "a country's yearly GDP 🌍";
+  return `${sci(usd / 1e14)} × world GDP 🌌`;
+}
+
+const fmtUsd = (x) => (x < 0.01 ? "< $0.01" : x < 1e6 ? "$" + x.toLocaleString(undefined, { maximumFractionDigits: x < 100 ? 2 : 0 }) : x < 1e15 ? "$" + fmtNum(x) : "$" + sci(x));
+
+function renderCost() {
+  const r = bench.rates, sw = bench.swarm;
+  const price = Math.max(0.0001, Number($("cost-price").value) || 0.045);
+  const fleet = Math.round(10 ** Number($("cost-fleet").value));
+  const speed = Number($("cost-speed").value);
+  const bits = Number($("bf-bits").value);
+  $("cost-fleet-out").textContent = fleet.toLocaleString();
+  const des = sw && sw.per_vcpu ? sw.per_vcpu : r.des;
+  const bcrypt12 = r.bcrypt10 / 4;
+  const targets = [
+    { name: `Demo DES key (${bits} bits)`, work: 2 ** (bits - 1), rate: des, unit: "keys" },
+    { name: "DES (56-bit)", work: 2 ** 55, rate: des, unit: "keys" },
+    { name: "3DES (112-bit security)", work: 2 ** 111, rate: des / 3, unit: "keys" },
+    { name: "AES-128", work: 2 ** 127, rate: r.aes128, unit: "keys" },
+    { name: "AES-256", work: 2 ** 255, rate: r.aes256, unit: "keys" },
+    { name: "8 lowercase letters, MD5", work: 26 ** 8 / 2, rate: r.md5, unit: "hashes" },
+    { name: "8 lowercase letters, bcrypt (cost 12)", work: 26 ** 8 / 2, rate: bcrypt12, unit: "hashes" },
+    { name: "12 random characters, bcrypt (cost 12)", work: 95 ** 12 / 2, rate: bcrypt12, unit: "hashes" },
+    { name: "SHA-256 collision (birthday bound)", work: 2 ** 128, rate: r.sha256, unit: "hashes" },
+  ];
+  const AGE = 1.38e10 * 365.25 * 86400;
+  const rows = targets.map((t) => {
+    const perVcpu = t.rate * speed;
+    const secs = t.work / (perVcpu * fleet);
+    const usd = (t.work / perVcpu / 3600) * price;
+    return { ...t, perVcpu, secs, usd };
+  });
+  $("cost-body").innerHTML = rows.map((t) => `<tr class="${t.usd < 2000 ? "cheap" : t.usd > 1e14 ? "costly" : ""}">
+      <td>${esc(t.name)}</td><td>${fmtNum(t.work)} ${t.unit}</td><td>${fmtNum(t.perVcpu)}/s</td>
+      <td class="${t.secs > AGE ? "safe" : ""}">${fmtDuration(t.secs)}${t.secs > AGE ? " 🌌" : ""}</td>
+      <td class="money">${fmtUsd(t.usd)}</td><td>${compareCost(t.usd)}</td></tr>`).join("");
+
+  const d = rows[1], a = rows[3];
+  $("cost-headline").innerHTML = `With <b>${fleet.toLocaleString()} vCPUs</b>, breaking <b>DES</b> takes
+    <b>${fmtDuration(d.secs)}</b> and costs <b>${fmtUsd(d.usd)}</b>. <b>AES-128</b> would take
+    <b>${fmtDuration(a.secs)}</b> and cost <b>${fmtUsd(a.usd)}</b>.`;
+  $("cost-source").innerHTML = (sw && sw.per_vcpu
+    ? `DES speed measured from your swarm (job ${esc(sw.job)}: ${fmtNum(sw.rate)} keys/s with ${sw.workers} workers on ${sw.vcpus} vCPUs). `
+    : "DES speed: 1-core benchmark (run a brute-force attack to use your swarm's real speed). ")
+    + `Other speeds: 1-core benchmark of the same Python code the workers run.`
+    + (bench.busy ? " ⚠️ Measured while an attack was running, so speeds may be too low. Re-measure when idle." : "");
+}
+
 const schemeLabel = (m) => ({ md5: "MD5, no salt", md5_salted: "MD5 + per-user salt", bcrypt: `bcrypt, cost ${m.cost}` }[m.scheme]);
 
 function passwordsSummary(job) {
@@ -520,6 +591,7 @@ function render(s) {
   $("top-rate").textContent = fmtNum(smoothRate) + "/s";
   $("top-queue").textContent = s.queue_depth;
 
+  if (job && autoTabbedJob === "from-url") autoTabbedJob = job.id; // stay on the tab from the URL
   if (job && autoTabbedJob !== job.id) { // jump to the tab of a newly started job
     autoTabbedJob = job.id;
     if (job.attack !== activeTab && ATTACK_UI[job.attack]) return showTab(job.attack);
@@ -705,4 +777,11 @@ function connect() {
   };
 }
 updateSliders();
+// Open a tab straight from the URL, e.g. http://localhost:8090/#cost or #mitm
+const fromHash = location.hash.slice(1);
+if (document.querySelector(`.tab[data-tab="${CSS.escape(fromHash)}"]`)) {
+  autoTabbedJob = "from-url"; // don't jump away to the last job's tab on the first snapshot
+  showTab(fromHash);
+}
+document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => history.replaceState(null, "", "#" + t.dataset.tab)));
 connect();

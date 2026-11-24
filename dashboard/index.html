@@ -30,6 +30,7 @@
     <button class="tab" data-tab="passwords">4 · Passwords</button>
     <button class="tab" data-tab="padding_oracle">5 · Padding Oracle</button>
     <button class="tab" data-tab="classical">6 · Classical Ciphers</button>
+    <button class="tab tab-cost" data-tab="cost">💰 Cost to Crack</button>
   </nav>
 
   <main class="layout">
@@ -197,6 +198,40 @@
     </section>
 
     <section id="result" class="card result hidden"></section>
+
+    <!-- ================= Cost to crack (own tab, full width) ================= -->
+    <section class="card wide panel hidden" data-panel="cost">
+      <h2>💰 What would it cost to crack this in the cloud?</h2>
+      <p class="muted">Rent a fleet of cloud vCPUs, run the attack, pay by the hour. Average case: half the keyspace
+        (for a hash collision, the birthday bound).</p>
+      <div class="cost-controls">
+        <label>Price per vCPU-hour (USD)
+          <input id="cost-price" type="number" min="0.001" step="0.005" value="0.045" class="num" />
+          <span class="muted small">default ≈ AWS compute-optimized on-demand (approx.; check current pricing)</span>
+        </label>
+        <label><span>Fleet size: <b id="cost-fleet-out">1,000</b> vCPUs</span>
+          <input id="cost-fleet" type="range" min="0" max="7" step="0.5" value="3" />
+          <span class="muted small">1 … 10 million vCPUs</span>
+        </label>
+        <label>Attacker's code / hardware
+          <select id="cost-speed" class="select">
+            <option value="1">Our Python workers (measured)</option>
+            <option value="100">Optimized C / assembly (assumed ≈100×)</option>
+            <option value="10000">GPU cluster (assumed ≈10,000×)</option>
+            <option value="1000000">Custom chips / ASIC (assumed ≈1,000,000×)</option>
+          </select>
+          <span class="muted small">assumed speedup at the same price per vCPU-hour</span>
+        </label>
+      </div>
+      <p id="cost-headline" class="cost-headline"></p>
+      <table class="reality-table cost-table">
+        <thead><tr><th>Target</th><th>Work (avg)</th><th>Speed / vCPU</th><th>Time with this fleet</th>
+          <th>Cloud cost</th><th>That's about…</th></tr></thead>
+        <tbody id="cost-body"><tr><td colspan="6" class="muted">Measuring speeds…</td></tr></tbody>
+      </table>
+      <p class="muted small" id="cost-source"></p>
+      <button id="cost-remeasure" class="btn">↻ Re-measure speeds</button>
+    </section>
 
     <!-- ================= Heatmap ================= -->
     <section class="card heat">

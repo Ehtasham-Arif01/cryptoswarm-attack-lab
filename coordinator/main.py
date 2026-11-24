@@ -16,6 +16,7 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from swarm import benchmark
 from swarm import keys as K
 from swarm.attacks import ATTACKS
 from swarm.events import MAX_EVENTS, make_event
@@ -192,6 +193,8 @@ async def create_job(req: JobRequest):
         await r.delete(K.job_table(old))
 
     params = attack.clean_params(req.params)
+    workers = await load_workers()
+    vcpus = sum(w.get("cpus") or 1 for w in workers)  # an uncapped worker counts as 1 vCPU
     try:
         plan = await asyncio.to_thread(attack.plan, params)
     except OSError as exc:  # e.g. the oracle container isn't running
@@ -213,6 +216,8 @@ async def create_job(req: JobRequest):
             "phase_ends": json.dumps(plan.phase_ends),
             "phase_names": json.dumps(plan.phase_names),
             "created": time.time(),
+            "workers": len(workers),
+            "vcpus": vcpus,
         },
     )
     pipe.set(K.job_secret(jid), json.dumps(plan.secret))
@@ -231,6 +236,42 @@ async def create_job(req: JobRequest):
 @app.post("/api/jobs/cancel")
 async def cancel():
     return {"cancelled": await cancel_current()}
+
+
+BENCH_KEY = f"{K.PREFIX}:benchmark"
+BENCH_TTL = 600
+
+
+async def last_bruteforce_run() -> dict | None:
+    """Real speed of the swarm in the most recent finished brute-force job."""
+    for jid in await r.lrange(K.JOBS, 0, 100):
+        h = await r.hgetall(K.job(jid))
+        if h.get("attack") != "bruteforce" or not h.get("finished"):
+            continue
+        elapsed = float(h["finished"]) - float(h["created"])
+        if elapsed < 1 or int(h["tried"]) < 10_000:
+            continue
+        rate = int(h["tried"]) / elapsed
+        vcpus = float(h.get("vcpus") or 0) or None
+        return {"job": jid, "rate": rate, "workers": int(h.get("workers") or 0), "vcpus": vcpus,
+                "per_vcpu": rate / vcpus if vcpus else None}
+    return None
+
+
+@app.get("/api/benchmark")
+async def get_benchmark(refresh: bool = False):
+    """Single-core speeds (cached for 10 min) + the measured speed of the real swarm."""
+    cached = None if refresh else await r.get(BENCH_KEY)
+    if cached:
+        bench = json.loads(cached)
+    else:
+        jid = await r.get(K.CURRENT_JOB)
+        busy = bool(jid) and await r.hget(K.job(jid), "status") == "running"
+        bench = {"rates": await asyncio.to_thread(benchmark.run), "t": time.time(), "busy": busy}
+        if not busy:  # a measurement taken while workers use the CPU is too low: don't keep it
+            await r.set(BENCH_KEY, json.dumps(bench), ex=BENCH_TTL)
+    bench["swarm"] = await last_bruteforce_run()
+    return bench
 
 
 @app.websocket("/ws")

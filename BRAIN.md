@@ -100,7 +100,13 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   500/500 full keys correct. Swarm runtime ≈ 50–150 ms. OTP: best IoC ≈ 0.040 → "no pattern".
   Dashboard: IoC-per-length chart (peaks at L, 2L), letter frequency chart (cipher vs recovered vs English), fix table.
 - ⬜ Fault-tolerance demo polish (dead worker tile turns red, requeue shown in event log)
-- ⬜ Cost-to-crack calculator (keys/s → AWS $ for DES vs AES)
+- ✅ Cost-to-crack tab (`#cost`): `GET /api/benchmark` = 1-core speeds of the workers' own Python code
+  (DES, AES-128/256, MD5, SHA-256, bcrypt), cached 10 min, not cached if measured during an attack ("busy").
+  DES uses the swarm's real speed per vCPU from the last brute-force job (jobs now store `workers` + `vcpus`).
+  Inputs: $/vCPU-hour (default 0.045 ≈ AWS on-demand, marked approximate), fleet 1–10M vCPUs, assumed speedup
+  (1×/100×/10⁴×/10⁶×). Output per target: time, $ cost, comparison (coffee … × world GDP).
+  Example (1,000 vCPUs, our Python): DES 53 years / ~$21M; AES-128 ≈ 3.4×10¹⁴ × world GDP.
+- ✅ Tabs can be opened from the URL: `http://localhost:8090/#mitm`, `#cost`, …
 - ⬜ Attack history (SQLite) + PDF report export
 
 ### Week 4: DevOps + polish
@@ -131,6 +137,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 
 ## 7. Notes / gotchas
+- Speedup factors on the cost tab are assumptions, labelled as such. Don't present them as measured.
 - Padding oracle test sends ~8k requests in-process, so it only decrypts the first + last block (~35 s).
 - `attack.plan()` runs in a thread in the coordinator (padding oracle makes an HTTP call to the oracle).
 - Passwords: candidate generator has ~0.2% duplicates (l33t doesn't change words without a/e/i/o/s/t). Harmless.
