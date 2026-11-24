@@ -110,6 +110,14 @@ class ClassicalCiphers(Attack):
         summary = f"Frequency analysis of a {n}-letter {names[p['cipher']]} ciphertext"
         return Plan(meta, [lengths, columns], MAX_LEN * n + n, secret, summary, ["key length", "columns"])
 
+    def summarize(self, job: dict) -> str:
+        live = job["live"]
+        best = max((v["ioc"] for k, v in live.items() if k.startswith("len:")), default=0)
+        if best < 0.05:
+            return f"no pattern found (best IoC {best:.3f}): {job['meta']['cipher']} holds"
+        cols = sorted((int(k[4:]), v["letter"]) for k, v in live.items() if k.startswith("col:"))
+        return f"{job['meta']['cipher']} key {''.join(c for _, c in cols)} recovered by frequency analysis"
+
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         text = meta["ciphertext"]
         live = K.job_live(ctx.job_id)

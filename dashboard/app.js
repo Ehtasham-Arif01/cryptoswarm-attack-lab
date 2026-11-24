@@ -58,6 +58,7 @@ function showTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
   if (name === "cost" && !bench) loadBench(false);
+  if (name === "history") loadHistory();
   if (lastState) render(lastState);
 }
 document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
@@ -556,6 +557,94 @@ function renderCost() {
     + (bench.busy ? " ⚠️ Measured while an attack was running, so speeds may be too low. Re-measure when idle." : "");
 }
 
+// ---------------------------------------------------------------- history
+const ATTACK_NAMES = { bruteforce: "Brute Force DES", mitm: "Meet-in-the-Middle", birthday: "Birthday Attack",
+  passwords: "Passwords", padding_oracle: "Padding Oracle", classical: "Classical Ciphers" };
+let histRuns = [];
+let lastHistoryJob = null;
+
+const scaleChart = new Chart($("scale-chart"), {
+  type: "scatter",
+  data: { datasets: [
+    { label: "Each run (avg while n workers busy)", data: [], backgroundColor: "rgba(79,140,255,.7)", pointRadius: 5 },
+    { label: "Average", data: [], showLine: true, borderColor: "#36d399", backgroundColor: "#36d399", pointRadius: 4, borderWidth: 2 },
+  ] },
+  options: { animation: false, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: "#e6ebf5", boxWidth: 12 } },
+      tooltip: { callbacks: { label: (c) => `${c.parsed.x} workers: ${fmtNum(c.parsed.y)} keys/s` } } },
+    scales: {
+      x: { ...axis, type: "linear", min: 0, title: { display: true, text: "workers", color: "#8a96ad" }, ticks: { ...axis.ticks, stepSize: 1 } },
+      y: { ...axis, beginAtZero: true, title: { display: true, text: "keys / second", color: "#8a96ad" }, ticks: { ...axis.ticks, callback: (v) => fmtNum(v) } },
+    } },
+});
+
+async function loadHistory() {
+  const filter = $("hist-filter").value;
+  histRuns = await (await fetch("/api/history" + (filter ? "?attack=" + encodeURIComponent(filter) : ""))).json();
+  renderHistory();
+}
+$("hist-filter").addEventListener("change", loadHistory);
+$("hist-clear").addEventListener("click", async () => {
+  if (!confirm("Delete the whole attack history? This can't be undone.")) return;
+  await fetch("/api/history", { method: "DELETE" });
+  loadHistory();
+});
+
+const fmtParams = (p) => Object.entries(p).map(([k, v]) => `${k}=${v}`).join(", ") || "n/a";
+
+function renderHistory() {
+  $("hist-count").textContent = `(${histRuns.length} run${histRuns.length === 1 ? "" : "s"})`;
+  $("hist-body").innerHTML = histRuns.length ? histRuns.map((r) => `<tr>
+      <td>${new Date(r.created * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+      <td>${esc(ATTACK_NAMES[r.attack] || r.attack)}</td>
+      <td class="mono">${esc(fmtParams(r.params))}</td>
+      <td class="outcome"><span class="badge ${esc(r.status)}">${esc(r.status === "exhausted" ? "complete" : r.status)}</span>${esc(r.outcome)}</td>
+      <td>${fmtDuration(r.elapsed)}</td>
+      <td>${fmtNum(r.tried)} ${esc(r.unit)}</td>
+      <td>${r.workers ?? "?"}${r.vcpus ? ` <span class="muted">(${r.vcpus} vCPU)</span>` : ""}</td>
+      <td>${r.rate ? fmtNum(r.rate) + "/s" : "n/a"}</td></tr>`).join("")
+    : '<tr><td colspan="8" class="muted">No runs yet. Start an attack on any tab.</td></tr>';
+
+  // stats tiles
+  const by = {};
+  histRuns.forEach((r) => (by[r.attack] = (by[r.attack] || 0) + 1));
+  const successes = histRuns.filter((r) => r.status === "found" || r.status === "exhausted").length;
+  const totalWork = histRuns.reduce((a, r) => a + r.tried, 0);
+  const fastest = histRuns.filter((r) => r.attack === "bruteforce" && r.status === "found").sort((a, b) => a.elapsed - b.elapsed)[0];
+  $("hist-stats").innerHTML = [
+    ["Runs", histRuns.length],
+    ["Finished", `${successes} / ${histRuns.length}`],
+    ["Total work", fmtNum(totalWork) + " ops"],
+    ["Fastest DES crack", fastest ? `${fmtDuration(fastest.elapsed)} (${fastest.params.bits} bits)` : "n/a"],
+    ["Most-run attack", Object.keys(by).length ? ATTACK_NAMES[Object.entries(by).sort((a, b) => b[1] - a[1])[0][0]] : "n/a"],
+    ["Time attacking", fmtDuration(histRuns.reduce((a, r) => a + r.elapsed, 0))],
+  ].map(([l, v]) => `<div class="tile"><span class="label">${l}</span><span class="value">${esc(v)}</span></div>`).join("");
+
+  // scaling chart: 1-second speed samples of brute-force runs, grouped by number of busy workers
+  const points = [], groups = {};
+  histRuns.filter((r) => r.attack === "bruteforce").forEach((r) => {
+    for (const [w, [rate, n]] of Object.entries(r.samples || {})) {
+      if (n < 3) continue; // too few samples to trust
+      points.push({ x: Number(w), y: rate });
+      const g = (groups[w] = groups[w] || { sum: 0, n: 0 });
+      g.sum += rate * n;
+      g.n += n;
+    }
+  });
+  const avg = Object.entries(groups).map(([w, g]) => ({ x: Number(w), y: g.sum / g.n })).sort((a, b) => a.x - b.x);
+  const bf = points;
+  scaleChart.data.datasets[0].data = points;
+  scaleChart.data.datasets[1].data = avg;
+  scaleChart.update();
+  const one = avg.find((p) => p.x === 1), top = avg[avg.length - 1];
+  $("scale-note").textContent = bf.length < 2
+    ? "Run a brute-force attack and scale the workers up while it runs (1 → 2 → 4 → 8) to fill this chart."
+    : one && top && top.x > 1
+      ? `${top.x} workers were ${(top.y / one.y).toFixed(1)}× faster than 1 worker (ideal: ${top.x}×).` +
+        (top.y / one.y > top.x ? " More than ideal because this laptop runs its CPU at a lower clock when only one worker is busy." : "")
+      : "Add a run with 1 worker to compare against.";
+}
+
 const schemeLabel = (m) => ({ md5: "MD5, no salt", md5_salted: "MD5 + per-user salt", bcrypt: `bcrypt, cost ${m.cost}` }[m.scheme]);
 
 function passwordsSummary(job) {
@@ -610,6 +699,11 @@ function render(s) {
   if (activeTab === "birthday") renderBirthdayChart(job);
   renderEvents(s.events);
   if (job && job.status === "running") updateCharts(job, s);
+  const histKey = job ? job.id + job.status : null;
+  if (activeTab === "history" && histKey !== lastHistoryJob) {
+    lastHistoryJob = histKey;
+    setTimeout(loadHistory, 2500); // the recorder saves finished jobs every 2 s
+  }
 }
 
 function renderJob(job) {

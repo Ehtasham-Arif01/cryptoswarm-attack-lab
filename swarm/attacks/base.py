@@ -75,6 +75,10 @@ class Attack(ABC):
             out[key] = value
         return out
 
+    def summarize(self, job: dict) -> str:
+        """One-line outcome for the history. `job` is the coordinator's job snapshot."""
+        return {"found": "answer found", "exhausted": "search finished, nothing found"}.get(job["status"], job["status"])
+
     @abstractmethod
     def plan(self, params: dict) -> Plan: ...
 

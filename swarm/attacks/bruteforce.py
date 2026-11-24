@@ -43,6 +43,11 @@ class BruteForceDES(Attack):
         summary = f"Brute-force DES with {bits} secret bits: {total:,} keys in {n_chunks} chunks"
         return Plan(meta, [chunks], total, {"key": key.hex(), "index": secret_index}, summary, ["key search"])
 
+    def summarize(self, job: dict) -> str:
+        if job["status"] == "found":
+            return f"key 0x{job['result']['key']} found after {job['tried']:,} of {job['total']:,} keys"
+        return super().summarize(job)
+
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         bits = meta["bits"]
         prefix = bytes.fromhex(meta["prefix"])

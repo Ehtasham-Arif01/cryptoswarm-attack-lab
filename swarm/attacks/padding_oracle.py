@@ -63,6 +63,13 @@ class PaddingOracle(Attack):
         )
         return Plan(meta, [chunks], n * BS * 256, {"plaintext": MESSAGE}, summary, ["decrypt blocks"])
 
+    def summarize(self, job: dict) -> str:
+        blocks = job["live"].values()
+        done = sum(b["status"] == "done" for b in blocks)
+        if any(b["status"] == "failed" for b in blocks):
+            return f"blocked by Encrypt-then-MAC after {job['tried']:,} queries"
+        return f"{done}/{job['meta']['n_blocks']} blocks decrypted with {job['tried']:,} oracle queries ({job['meta']['mode']})"
+
     # ------------------------------------------------------------ worker side
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         b = chunk["block"]

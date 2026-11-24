@@ -17,6 +17,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       ORACLE_URL: http://oracle:9000
+      HISTORY_DB: /data/history.db
+    volumes:
+      - history:/data   # attack history (SQLite) survives restarts
     depends_on:
       redis: { condition: service_healthy }
 
@@ -47,3 +50,6 @@ services:
     ports:
       - "${DASHBOARD_PORT:-8090}:80"
     depends_on: [coordinator]
+
+volumes:
+  history:

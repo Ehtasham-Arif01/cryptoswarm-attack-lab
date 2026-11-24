@@ -155,6 +155,11 @@ class PasswordCracking(Attack):
         )
         return Plan(meta, [chunks], n_cand * per_guess, {"passwords": passwords}, summary, ["guess"])
 
+    def summarize(self, job: dict) -> str:
+        m = job["meta"]
+        label = {"md5": "MD5", "md5_salted": "MD5 + salt", "bcrypt": f"bcrypt cost {m['cost']}"}[m["scheme"]]
+        return f"cracked {len(job['cracked'])}/{len(m['users'])} accounts ({label})"
+
     # ------------------------------------------------------------ worker side
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         cracked_key = K.job_cracked(ctx.job_id)

@@ -132,7 +132,7 @@ class Worker:
                 push_event(self.r, f"🔓 Worker {self.id} cracked job {jid}! {self.describe(result)}", "success")
         elif n_done >= ends[-1]:
             if self.finish_job(keys=[K.job(jid)], args=["exhausted", json.dumps({}), now]):
-                push_event(self.r, f"Job {jid}: search space exhausted, nothing found", "warn")
+                push_event(self.r, f"✔ Job {jid} complete: all {ends[-1]} chunks done")
         elif n_done >= ends[phase] and self.advance_phase(keys=[K.job(jid)], args=[phase]):
             self.start_phase(jid, phase + 1, json.loads(names))
 

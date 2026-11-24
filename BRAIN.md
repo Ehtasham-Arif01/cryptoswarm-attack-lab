@@ -107,7 +107,13 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   (1×/100×/10⁴×/10⁶×). Output per target: time, $ cost, comparison (coffee … × world GDP).
   Example (1,000 vCPUs, our Python): DES 53 years / ~$21M; AES-128 ≈ 3.4×10¹⁴ × world GDP.
 - ✅ Tabs can be opened from the URL: `http://localhost:8090/#mitm`, `#cost`, …
-- ⬜ Attack history (SQLite) + PDF report export
+- ✅ Attack history (`coordinator/history.py`, SQLite on the `history` Docker volume, survives restarts).
+  Recorder task saves every job once it stops running (and backfills jobs still in Redis). Each plugin has
+  `summarize(job)` for a one-line outcome. `GET/DELETE /api/history` (clearing also empties Redis's job list,
+  otherwise old jobs get re-imported). History tab (`#history`): filter, stats tiles, table.
+  Scaling chart uses **1-second samples grouped by busy workers** (`s_rate:<n>`/`s_cnt:<n>` on the job hash), so it's
+  correct when workers are scaled mid-attack. Measured in one run: 1 → 2.9k, 2 → 4.7k, 4 → 13.3k, 8 → 40k keys/s.
+- ❌ PDF report export: dropped (user doesn't need to submit a report)
 
 ### Week 4: DevOps + polish
 - ⬜ Kubernetes manifests + HPA autoscaling on queue depth
@@ -135,8 +141,11 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | Workers capped at 0.25 CPU each by default | Only machine is a 2-core i5-6300U; the cap makes scaling visible (≈15× from 1→8) |
 | 2026-11-24 | MITM 3DES fix shown as a computed table, not a running attack | An attack that can't finish isn't a useful demo; the table shows the times at the swarm's real speed |
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
+| 2026-11-24 | No PDF reports, history only | User doesn't need to submit a report |
+| 2026-11-24 | Scaling measured from per-second samples, not per-run averages | New workers take seconds to boot on ¼ core; per-run averages and start-time worker counts were wrong |
 
 ## 7. Notes / gotchas
+- A job's `workers`/`vcpus` = the most seen while it ran (reaper updates them every second).
 - Speedup factors on the cost tab are assumptions, labelled as such. Don't present them as measured.
 - Padding oracle test sends ~8k requests in-process, so it only decrypts the first + last block (~35 s).
 - `attack.plan()` runs in a thread in the coordinator (padding oracle makes an HTTP call to the oracle).

@@ -67,6 +67,12 @@ class MeetInTheMiddle(Attack):
         )
         return Plan(meta, [build, match], 2 * space, secret, summary, ["build table", "match"])
 
+    def summarize(self, job: dict) -> str:
+        if job["status"] == "found":
+            naive = 2 ** (2 * job["meta"]["bits"])
+            return f"both keys recovered with {job['tried']:,} ops ({naive / max(job['tried'], 1):,.0f}× less than naive)"
+        return super().summarize(job)
+
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         bits = meta["bits"]
         new, mode = DES.new, DES.MODE_ECB

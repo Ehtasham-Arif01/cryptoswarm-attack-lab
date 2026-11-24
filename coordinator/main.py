@@ -16,6 +16,7 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from coordinator import history
 from swarm import benchmark
 from swarm import keys as K
 from swarm.attacks import ATTACKS
@@ -55,6 +56,25 @@ async def requeue_processing(wid: str) -> list[str]:
     return requeued
 
 
+async def track_job_workers() -> None:
+    """Record the most workers/vCPUs online during the running job (workers may join after it starts)."""
+    jid = await r.get(K.CURRENT_JOB)
+    if not jid or await r.hget(K.job(jid), "status") != "running":
+        return
+    workers = await load_workers()
+    vcpus = sum(w.get("cpus") or 1 for w in workers)
+    old_w, old_v = await r.hmget(K.job(jid), "workers", "vcpus")
+    if len(workers) > int(old_w or 0):
+        await r.hset(K.job(jid), mapping={"workers": len(workers), "vcpus": max(vcpus, float(old_v or 0))})
+    # one speed sample per second, grouped by how many workers are busy right now
+    busy = [w for w in workers if w["status"] == "working"]
+    if busy:
+        pipe = r.pipeline()
+        pipe.hincrbyfloat(K.job(jid), f"s_rate:{len(busy)}", sum(w["rate"] for w in workers))
+        pipe.hincrby(K.job(jid), f"s_cnt:{len(busy)}", 1)
+        await pipe.execute()
+
+
 async def reaper() -> None:
     known: set[str] = set()
     while True:
@@ -73,16 +93,61 @@ async def reaper() -> None:
                             f"💀 Worker {wid} died mid-chunk. Requeued chunk(s) {', '.join(chunks)}", "error"
                         )
             known = alive
+            await track_job_workers()
         except Exception as exc:  # keep the reaper alive no matter what
             print(f"[reaper] {exc!r}", flush=True)
         await asyncio.sleep(1)
 
 
+# ---------------------------------------------------------------- history
+def run_record(job: dict, h: dict) -> dict:
+    attack = ATTACKS[job["attack"]]
+    try:
+        outcome = attack.summarize(job)
+    except Exception as exc:  # a summary must never break recording
+        outcome = f"{job['status']} ({exc!r})"
+    if job["status"] == "cancelled":
+        pct = 100 * job["tried"] / max(job["total"], 1)
+        outcome = f"cancelled at {pct:.0f}%" + ("" if outcome == "cancelled" else f": {outcome}")
+    return {
+        "id": job["id"], "attack": job["attack"], "title": job["title"], "status": job["status"],
+        "params": job["params"], "outcome": outcome, "created": job["created"], "elapsed": job["elapsed"],
+        "tried": job["tried"], "total": job["total"], "unit": job["unit"],
+        "workers": int(h["workers"]) if h.get("workers") else None,
+        "vcpus": float(h["vcpus"]) if h.get("vcpus") else None,
+        "rate": job["tried"] / job["elapsed"] if job["elapsed"] > 0 else None,
+        # {busy workers: [average swarm speed, number of 1-second samples]}
+        "samples": {
+            k[7:]: [float(h[k]) / int(h["s_cnt:" + k[7:]]), int(h["s_cnt:" + k[7:]])]
+            for k in h if k.startswith("s_rate:") and int(h.get("s_cnt:" + k[7:], 0))
+        },
+    }
+
+
+async def history_recorder() -> None:
+    """Save every job that has stopped running. Also backfills jobs still in Redis after a restart."""
+    while True:
+        try:
+            jids = await r.lrange(K.JOBS, 0, 200)
+            missing = [j for j in jids if j not in await asyncio.to_thread(history.known_ids, jids)]
+            for jid in missing:
+                h = await r.hgetall(K.job(jid))
+                if not h or h.get("status") == "running" or h.get("attack") not in ATTACKS:
+                    continue
+                job = await load_job(jid)
+                job["secret"] = None
+                await asyncio.to_thread(history.record, run_record(job, h))
+        except Exception as exc:
+            print(f"[history] {exc!r}", flush=True)
+        await asyncio.sleep(2)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    task = asyncio.create_task(reaper())
+    tasks = [asyncio.create_task(reaper()), asyncio.create_task(history_recorder())]
     yield
-    task.cancel()
+    for task in tasks:
+        task.cancel()
 
 
 app = FastAPI(title="CryptoSwarm Coordinator", lifespan=lifespan)
@@ -223,6 +288,7 @@ async def create_job(req: JobRequest):
     pipe.set(K.job_secret(jid), json.dumps(plan.secret))
     pipe.set(K.CURRENT_JOB, jid)
     pipe.lpush(K.JOBS, jid)
+    pipe.ltrim(K.JOBS, 0, 499)
     task = lambda c: json.dumps({"job_id": jid, "chunk": c})  # noqa: E731
     # LPUSH in order, so chunk 0 sits at the right end and is popped first
     pipe.lpush(K.QUEUE, *[task(c) for c in plan.phases[0]])
@@ -272,6 +338,22 @@ async def get_benchmark(refresh: bool = False):
             await r.set(BENCH_KEY, json.dumps(bench), ex=BENCH_TTL)
     bench["swarm"] = await last_bruteforce_run()
     return bench
+
+
+@app.get("/api/history")
+async def get_history(attack: str | None = None, limit: int = 500):
+    return await asyncio.to_thread(history.list_runs, attack, min(limit, 2000))
+
+
+@app.delete("/api/history")
+async def clear_history():
+    # Forget old jobs in Redis too, or the recorder would import them again.
+    current = await r.get(K.CURRENT_JOB)
+    running = current and await r.hget(K.job(current), "status") == "running"
+    await r.delete(K.JOBS)
+    if running:
+        await r.lpush(K.JOBS, current)
+    return {"deleted": await asyncio.to_thread(history.clear)}
 
 
 @app.websocket("/ws")

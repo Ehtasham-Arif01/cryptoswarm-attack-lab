@@ -95,6 +95,13 @@ class BirthdayAttack(Attack):
         )
         return Plan(meta, [chunks], 2 * variants, {}, summary, ["hash variants"])
 
+    def summarize(self, job: dict) -> str:
+        if job["status"] == "found":
+            r, m = job["result"], job["meta"]
+            return (f"collision 0x{r['hash']} after {job['tried']:,} hashes "
+                    f"({job['tried'] / m['expected_hashes']:.1f}× the birthday estimate)")
+        return super().summarize(job)
+
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
         bits = meta["bits"]
         table = K.job_table(ctx.job_id)

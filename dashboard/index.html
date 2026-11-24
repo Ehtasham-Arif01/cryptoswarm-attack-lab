@@ -31,6 +31,7 @@
     <button class="tab" data-tab="padding_oracle">5 · Padding Oracle</button>
     <button class="tab" data-tab="classical">6 · Classical Ciphers</button>
     <button class="tab tab-cost" data-tab="cost">💰 Cost to Crack</button>
+    <button class="tab tab-history" data-tab="history">📜 History</button>
   </nav>
 
   <main class="layout">
@@ -198,6 +199,40 @@
     </section>
 
     <section id="result" class="card result hidden"></section>
+
+    <!-- ================= History (own tab, full width) ================= -->
+    <section class="card wide panel hidden" data-panel="history">
+      <div class="history-head">
+        <h2>📜 Attack history <span class="muted small" id="hist-count"></span></h2>
+        <div class="history-actions">
+          <select id="hist-filter" class="select">
+            <option value="">All attacks</option>
+            <option value="bruteforce">1 · Brute Force DES</option>
+            <option value="mitm">2 · Meet-in-the-Middle</option>
+            <option value="birthday">3 · Birthday Attack</option>
+            <option value="passwords">4 · Passwords</option>
+            <option value="padding_oracle">5 · Padding Oracle</option>
+            <option value="classical">6 · Classical Ciphers</option>
+          </select>
+          <button id="hist-clear" class="btn">🗑 Clear history</button>
+        </div>
+      </div>
+      <div class="history-top">
+        <div>
+          <h2>⚡ Scaling: brute-force speed vs number of workers <span class="muted small">(from your real runs)</span></h2>
+          <div class="chart-box small-chart"><canvas id="scale-chart"></canvas></div>
+          <p class="muted small" id="scale-note"></p>
+        </div>
+        <div class="hist-stats" id="hist-stats"></div>
+      </div>
+      <div class="table-scroll">
+        <table class="reality-table history-table">
+          <thead><tr><th>When</th><th>Attack</th><th>Settings</th><th>Result</th><th>Time</th><th>Work</th>
+            <th>Workers</th><th>Speed</th></tr></thead>
+          <tbody id="hist-body"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- ================= Cost to crack (own tab, full width) ================= -->
     <section class="card wide panel hidden" data-panel="cost">
