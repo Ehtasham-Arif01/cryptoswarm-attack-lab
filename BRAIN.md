@@ -144,6 +144,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   chunks that raised as *done* → now retried up to 3 times (`MAX_ATTEMPTS`).
   First green run: 2026-11-24 (~3.5 min). E2E on the runner: all 7 cases pass (padding oracle 7 s with 4 uncapped workers).
   GHCR push needed the `org.opencontainers.image.source` label (otherwise `denied`). Packages are private.
+  A brand-new package can still be `denied` on its very first push (it gets created + linked anyway); the next run works.
   Actions pinned to current majors (checkout v7, setup-python v7, login-action v4) to avoid the Node 20 deprecation.
 - ✅ UI redesign: no emojis anywhere (UI + event messages + smoke test output); bundled Inter + JetBrains Mono
   (OFL, `dashboard/fonts/`); token-based dark theme; chart + worker colours from the validated dark categorical palette

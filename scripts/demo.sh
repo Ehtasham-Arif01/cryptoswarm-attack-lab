@@ -53,4 +53,4 @@ Back to 1:      docker compose up -d --scale worker=1 --scale worker-rust=0
 Run sheet:      DEMO.md
 MSG
 
-command -v xdg-open >/dev/null && xdg-open "$URL/#bruteforce" >/dev/null 2>&1 || true
+[[ -z "${NO_BROWSER:-}" ]] && command -v xdg-open >/dev/null && xdg-open "$URL/#bruteforce" >/dev/null 2>&1 || true
