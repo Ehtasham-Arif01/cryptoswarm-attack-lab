@@ -3,7 +3,7 @@ import json
 import pytest
 
 from swarm.attacks import ATTACKS
-from swarm.attacks.classical import ENGLISH_IOC, ioc, letters, PLAINTEXT, shift_text
+from swarm.attacks.classical import ENGLISH_IOC, PLAINTEXT, ioc, letters, shift_text
 
 
 class FakeRedis:

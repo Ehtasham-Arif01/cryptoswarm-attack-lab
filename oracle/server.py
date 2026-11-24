@@ -82,6 +82,8 @@ def session(req: Session):
     try:
         user = json.loads(plain)
     except ValueError:
+        user = None
+    if not isinstance(user, dict):  # forged tokens can decrypt to e.g. b"7": valid JSON, but not a session
         return JSONResponse({"error": "bad session data"}, status_code=400)
     return {"welcome": user.get("user", "?")}
 

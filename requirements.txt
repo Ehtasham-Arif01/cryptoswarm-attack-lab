@@ -1,6 +1,9 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
+fastapi==0.165.0
+# Pinned explicitly: FastAPI pulls it in, and dependency scanners only see what is listed here.
+# 0.41.3 had CVE-2025-62727, CVE-2026-48818, CVE-2026-54283 (found by Trivy image scan).
+starlette==1.10.0
+uvicorn[standard]==0.54.0
 redis==5.2.1
 pycryptodome==3.21.0
 bcrypt==4.2.1
-requests==2.32.3
+requests==2.34.2

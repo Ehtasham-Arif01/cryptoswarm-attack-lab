@@ -20,6 +20,7 @@ from swarm.events import ADVANCE_PHASE_LUA, FINISH_JOB_LUA, push_event
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 FLUSH_EVERY = 0.25  # seconds between progress reports to Redis
+MAX_ATTEMPTS = 3  # a chunk that raises is retried, then given up
 
 
 class ChunkContext:
@@ -98,8 +99,8 @@ class Worker:
             self.state.update(kw)
 
     # ---------- queue handling ----------
-    def requeue(self, raw: str, task: dict) -> None:
-        """Hand an unfinished chunk back to the queue (used on graceful shutdown)."""
+    def requeue(self, raw: str, task: dict, new_raw: str | None = None) -> None:
+        """Hand an unfinished chunk back to the queue (graceful shutdown or a failed attempt)."""
         jid, cid = task["job_id"], task["chunk"]["id"]
         prog = int(self.r.hget(K.chunk_progress(jid), cid) or 0)
         pipe = self.r.pipeline()
@@ -107,7 +108,7 @@ class Worker:
         pipe.hincrby(K.job(jid), "tried", -prog)
         pipe.hdel(K.chunk_progress(jid), cid)
         pipe.hdel(K.chunks_inflight(jid), cid)
-        pipe.rpush(K.QUEUE, raw)  # right end = picked up next
+        pipe.rpush(K.QUEUE, new_raw or raw)  # right end = picked up next
         pipe.execute()
 
     def finish_chunk(self, raw: str, task: dict, result: dict) -> None:
@@ -155,7 +156,8 @@ class Worker:
         if result.get("all_cracked"):
             return "every account in the leaked table is cracked"
         if "hash" in result:
-            return f"hash collision 0x{result['hash']}: fair contract #{result['legit_index']} = fraud #{result['fraud_index']}"
+            r = result
+            return f"hash collision 0x{r['hash']}: fair contract #{r['legit_index']} = fraud #{r['fraud_index']}"
         return ""
 
     def handle(self, raw: str) -> None:
@@ -174,9 +176,18 @@ class Worker:
         try:
             result = attack.run_chunk(meta, chunk, ctx)
             ctx.flush()
-        except Exception:
+        except Exception as exc:
             traceback.print_exc()
-            push_event(self.r, f"Worker {self.id} crashed on chunk {chunk['id']} of job {jid}", "error")
+            ctx.flush()
+            attempts = task.get("attempts", 0) + 1
+            if attempts < MAX_ATTEMPTS:  # never mark a failed chunk as done: try it again
+                push_event(self.r, f"⚠ Worker {self.id}: chunk {chunk['id']} failed ({type(exc).__name__}), "
+                                   f"retrying ({attempts}/{MAX_ATTEMPTS - 1})", "warn")
+                self.requeue(raw, task, json.dumps({**task, "attempts": attempts}))
+                self.set_state(status="idle", job=None, chunk=None)
+                return
+            push_event(self.r, f"Worker {self.id}: chunk {chunk['id']} of job {jid} failed {attempts} times, "
+                               f"giving up on it", "error")
             result = {}
 
         if result.get("aborted"):

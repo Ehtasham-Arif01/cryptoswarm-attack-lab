@@ -67,7 +67,7 @@ def ioc(text: str) -> float:
 
 def chi_squared(text: str) -> float:
     n = len(text) or 1
-    return sum((text.count(c) - n * f / 100) ** 2 / (n * f / 100) for c, f in zip(ALPHA, ENGLISH_FREQ))
+    return sum((text.count(c) - n * f / 100) ** 2 / (n * f / 100) for c, f in zip(ALPHA, ENGLISH_FREQ, strict=False))
 
 
 def pick_length(iocs: dict[int, float]) -> int:

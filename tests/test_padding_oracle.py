@@ -69,3 +69,15 @@ def test_encrypt_then_mac_kills_the_oracle(oracle):
     result = json.loads(ctx.r.h["swarm:job:test:live"]["0"])
     assert result["status"] == "failed" and result["plain"] == ""
     assert ctx.count == 4  # gave up after calibration
+
+
+def test_server_rejects_json_that_is_not_an_object(oracle):
+    """Regression: a forged token decrypting to b'7' used to crash the server with HTTP 500."""
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad
+
+    oracle.post("/setup", json={"mode": "vulnerable", "message": "x"})
+    iv = bytes(16)
+    ct = AES.new(server.state["key"], AES.MODE_CBC, iv).encrypt(pad(b"7", 16))
+    r = oracle.post("/api/session", json={"token": (iv + ct).hex()})
+    assert r.status_code == 400

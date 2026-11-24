@@ -35,7 +35,7 @@ Dashboard (nginx + JS/Chart.js) ⇄ WebSocket/REST ⇄ Coordinator (FastAPI)
 ## 3. Tech stack
 
 Python 3.12 (FastAPI, redis-py, pycryptodome, bcrypt, requests) · JavaScript + Chart.js · Rust (fast worker) ·
-Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + Trivy · SQLite (history).
+Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + Trivy + ruff · SQLite (history).
 
 ## 4. Repo
 
@@ -118,7 +118,14 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 ### Week 4: DevOps + polish
 - ⬜ Kubernetes manifests + HPA autoscaling on queue depth
 - ⬜ Rust worker + Python vs Rust benchmark tab
-- ⬜ GitHub Actions: tests, image build, Trivy scan
+- ✅ CI/CD (`.github/workflows/ci.yml`, checked with actionlint): **test** (ruff + pytest + `node --check`),
+  **security** (Trivy fs: deps, secrets, Dockerfile misconfig), **e2e** (build → Trivy image scan → stack with
+  4 uncapped workers → `scripts/smoke_test.py` runs all 7 attack cases → on main push images to
+  `ghcr.io/<owner>/cryptoswarm-attack-lab/{coordinator,worker,oracle}:<sha>|latest`). HIGH/CRITICAL with a fix fails the build.
+  Findings fixed while setting it up: containers ran as root (AVD-DS-0002) → `USER app` (uid 10001);
+  Starlette 0.41.3 had 3 HIGH CVEs (missed by the fs scan because it's a transitive dep) → FastAPI 0.165 + Starlette 1.10 pinned.
+  Smoke test also found 2 bugs: oracle crashed (500) on forged tokens decrypting to non-object JSON; worker marked
+  chunks that raised as *done* → now retried up to 3 times (`MAX_ATTEMPTS`).
 - ⬜ Demo script rehearsal, slides, report
 
 ### Optional (Tier 2, if time allows)
@@ -147,6 +154,8 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 ## 7. Notes / gotchas
 - A job's `workers`/`vcpus` = the most seen while it ran (reaper updates them every second).
 - Speedup factors on the cost tab are assumptions, labelled as such. Don't present them as measured.
+- Run `python3 scripts/smoke_test.py` before a demo: it runs every attack against the live stack (~2 min).
+- After switching containers to non-root, an old `history` volume needs: `docker compose run --rm --no-deps --user root --entrypoint chown coordinator -R 10001:10001 /data`.
 - Padding oracle test sends ~8k requests in-process, so it only decrypts the first + last block (~35 s).
 - `attack.plan()` runs in a thread in the coordinator (padding oracle makes an HTTP call to the oracle).
 - Passwords: candidate generator has ~0.2% duplicates (l33t doesn't change words without a/e/i/o/s/t). Harmless.

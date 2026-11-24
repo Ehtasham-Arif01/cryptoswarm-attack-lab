@@ -136,7 +136,9 @@ class PasswordCracking(Attack):
         n_chunks = 128
         size = -(-n_cand // n_chunks)
         chunks = [
-            {"id": c, "start": c * size, "end": min((c + 1) * size, n_cand)} for c in range(n_chunks) if c * size < n_cand
+            {"id": c, "start": c * size, "end": min((c + 1) * size, n_cand)}
+            for c in range(n_chunks)
+            if c * size < n_cand
         ]
         meta = {
             "scheme": scheme,

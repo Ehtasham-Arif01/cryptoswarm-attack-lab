@@ -70,7 +70,8 @@ class MeetInTheMiddle(Attack):
     def summarize(self, job: dict) -> str:
         if job["status"] == "found":
             naive = 2 ** (2 * job["meta"]["bits"])
-            return f"both keys recovered with {job['tried']:,} ops ({naive / max(job['tried'], 1):,.0f}× less than naive)"
+            less = naive / max(job["tried"], 1)
+            return f"both keys recovered with {job['tried']:,} ops ({less:,.0f}× less than naive)"
         return super().summarize(job)
 
     def run_chunk(self, meta: dict, chunk: dict, ctx: ChunkContext) -> dict:

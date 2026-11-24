@@ -120,7 +120,7 @@ class BirthdayAttack(Attack):
             clashes = [entries[k] for k, ok in enumerate(added) if not ok]
             if clashes:
                 owners = ctx.r.hmget(table, [tag for tag, _ in clashes])
-                for (tag, who), owner in zip(clashes, owners):
+                for (tag, who), owner in zip(clashes, owners, strict=False):
                     if owner and owner[0] != who[0]:  # legit vs fraud: the collision we want
                         li = int(who[1:] if who[0] == "L" else owner[1:])
                         fi = int(who[1:] if who[0] == "F" else owner[1:])

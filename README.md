@@ -65,8 +65,21 @@ key and the dashboard verifies the cracked key against it.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q
+.venv/bin/ruff check .                 # lint
+.venv/bin/python -m pytest -q          # unit tests
+python3 scripts/smoke_test.py          # every attack end-to-end against the running stack
 ```
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) on every push and pull request:
+
+1. **Test**: ruff, pytest, dashboard JS syntax check
+2. **Security**: Trivy scans dependencies, secrets and Dockerfiles
+3. **Build + end-to-end**: builds the images, Trivy-scans them, starts the stack and runs every attack
+4. **Deliver** (main only): pushes the images to GitHub Container Registry
+
+Any HIGH/CRITICAL vulnerability that has a fix available fails the pipeline. All containers run as a non-root user.
 
 ## Team
 
