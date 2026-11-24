@@ -207,7 +207,7 @@ function renderWorkers(s) {
   }
   const card = (w, isDead) => `
     <div class="wcard ${isDead ? "dead" : w.status}" style="--c:${color(w.id)}">
-      <span class="lang">${esc(w.lang)}</span>
+      <span class="lang">${esc(w.lang)}${w.cpus ? " · " + w.cpus + " cpu" : ""}</span>
       <div class="wid">${esc(w.id)}</div>
       <div class="wrate">${isDead ? "💀 offline" : fmtNum(w.rate) + "/s"}</div>
       <div class="muted">${isDead ? "chunk requeued" : w.status === "working" ? "chunk #" + w.chunk : "idle"}

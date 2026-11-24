@@ -100,10 +100,16 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | Reduced DES keys use only effective bits (not parity bits) | Parity bits are ignored by DES and would create duplicate keys |
 
 ## 7. Notes / gotchas
-- **Measured speed (dev laptop, 4 threads ≈ 2 real cores):** 1 worker 52k keys/s · 2 → 86k · 4 → 94k · 8 → 88k.
-  The speedup stops at the number of physical cores, **not** a bug. For a strong scaling demo:
-  use a machine with more cores, run workers on **both teammates' laptops** against one Redis
-  (needs Redis password + LAN access → ties into "secure the swarm"), or use the Rust worker.
+- **Demo laptop = the only machine:** Intel i5-6300U (2 cores / 4 threads), 8 GB RAM, 128 GB SSD.
+  RAM is not a problem (worker ≈ 23 MB). CPU is the limit.
+- **Uncapped workers** (WORKER_CPUS=0): 1 → 52k keys/s · 2 → 86k · 4 → 94k · 8 → 88k. Stops at 2 cores.
+- **Solution (default): each worker is capped to ¼ core** (`cpus: ${WORKER_CPUS:-0.25}` in compose), like a
+  small rented cloud VM. Measured: 1 → 3.7k · 2 → 9.4k · 4 → 16k · 8 → **57k keys/s (~15×)**.
+  With ½ core: 1 → 9.4k · 2 → 25k · 4 → 73k · 8 → 90k.
+  Scaling is slightly *better* than linear because the laptop lowers its CPU clock when the load is
+  light. Mention this honestly in the report.
+- **Demo timing (20 bits, ¼ core):** 1 worker shows ETA ≈ 5 min → `--scale worker=8` → cracked in ≈ 20 s.
+- Optional later: teammate's laptop as extra workers over Wi-Fi (Redis password + LAN), or the Rust worker.
 - The bottleneck is `DES.new()` object creation (~14 µs per key); pycryptodome's raw C API isn't
   easy to call directly (encryption goes through function pointers in its state struct).
 - Default brute-force size = **20 bits** (≈1M keys ≈ 10–20 s). Slider range 12–32.

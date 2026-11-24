@@ -23,9 +23,14 @@ services:
     build: { context: ., dockerfile: worker/Dockerfile }
     environment:
       REDIS_URL: redis://redis:6379/0
+      WORKER_CPUS: ${WORKER_CPUS:-0.25}
     depends_on:
       redis: { condition: service_healthy }
     stop_grace_period: 5s
+    # Each worker acts as a small "cloud server" with a fixed CPU share, so adding
+    # workers scales roughly linearly until the host's cores are full
+    # (2 cores / 0.25 = 8 workers). Set WORKER_CPUS=0 to remove the limit.
+    cpus: ${WORKER_CPUS:-0.25}
 
   dashboard:
     image: nginx:1.27-alpine

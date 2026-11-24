@@ -68,6 +68,7 @@ class Worker:
         self.state = {
             "id": self.id,
             "lang": "python",
+            "cpus": float(os.environ.get("WORKER_CPUS") or 0),  # 0 = no limit
             "status": "idle",
             "job": None,
             "chunk": None,
