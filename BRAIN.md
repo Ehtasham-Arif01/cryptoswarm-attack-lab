@@ -126,6 +126,9 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Starlette 0.41.3 had 3 HIGH CVEs (missed by the fs scan because it's a transitive dep) → FastAPI 0.165 + Starlette 1.10 pinned.
   Smoke test also found 2 bugs: oracle crashed (500) on forged tokens decrypting to non-object JSON; worker marked
   chunks that raised as *done* → now retried up to 3 times (`MAX_ATTEMPTS`).
+  First green run: 2026-11-24 (~3.5 min). E2E on the runner: all 7 cases pass (padding oracle 7 s with 4 uncapped workers).
+  GHCR push needed the `org.opencontainers.image.source` label (otherwise `denied`). Packages are private.
+  Actions pinned to current majors (checkout v7, setup-python v7, login-action v4) to avoid the Node 20 deprecation.
 - ⬜ Demo script rehearsal, slides, report
 
 ### Optional (Tier 2, if time allows)
