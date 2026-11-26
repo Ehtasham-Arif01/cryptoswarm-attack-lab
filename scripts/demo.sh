@@ -27,7 +27,11 @@ if minikube -p cryptoswarm status >/dev/null 2>&1; then
 fi
 
 step "Building and starting the stack"
-docker compose up -d --build --scale worker=1 --scale worker-rust=0
+if ! docker compose up -d --build --scale worker=1 --scale worker-rust=0; then
+  # No internet (e.g. venue Wi-Fi down): the build can't reach Docker Hub. Use the images built last time.
+  step "Build failed (offline?). Starting the images that are already built"
+  docker compose up -d --no-build --scale worker=1 --scale worker-rust=0
+fi
 
 step "Waiting for the coordinator"
 for _ in $(seq 1 60); do

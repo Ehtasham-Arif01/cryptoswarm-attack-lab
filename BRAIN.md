@@ -195,6 +195,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No PDF reports, history only | User doesn't need to submit a report |
 | 2026-11-26 | Removed the classical ciphers attack (#6) | User's request: not needed; 5 attacks left |
 | 2026-11-26 | Presenter mode scales with viewport width (vw clamp), demo.sh opens it by default | Fixed 17 px looked small on 1920 px projectors; presenting is the main use of demo.sh |
+| 2026-11-26 | demo.sh falls back to `up --no-build` when the build fails | Offline, BuildKit can't resolve base image tags on Docker Hub; the images built last time still run |
 | 2026-11-24 | Scaling measured from per-second samples, not per-run averages | New workers take seconds to boot on ¼ core; per-run averages and start-time worker counts were wrong |
 
 ## 7. Notes / gotchas
@@ -232,3 +233,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - nginx must re-resolve `coordinator` (Docker DNS `resolver 127.0.0.11`), otherwise rebuilding
   the coordinator gives 502 errors.
 - Ports 8000/8080 are in use on the dev machine, so the dashboard runs on **8090**.
+- **Offline check (2026-11-26):** no CDN/external URLs in the dashboard or services. The exact base tags
+  (`python:3.12-slim`, `nginxinc/nginx-unprivileged:1.31-alpine-slim`) must be in the local image store
+  (`docker pull` them while online) or `--build` fails offline. `k8s-up.sh` downloads KEDA from GitHub,
+  so the Kubernetes demo still needs internet the first time.
