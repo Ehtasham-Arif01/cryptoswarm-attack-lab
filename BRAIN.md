@@ -164,19 +164,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   (Ehtasham 1–9, Taha 10–20, other person drives the laptop), and per slide: script, detailed explanation,
   exact demo commands/dashboard inputs/expected result, likely questions. Fault-tolerance kill demo uses a 22-bit run.
 - ⬜ Slides (artifact + `CryptoSwarm-Slides.pptx`) and presenter script PDF still contain the classical-ciphers slides: update them
-- ✅ Presenter mode polish (2026-11-26, checked with headless screenshots at 1366 and 1920 px on every tab):
-  root font = `clamp(16px, 1.15vw, 24px)` so it zooms with the projector width; layout max-width in rem;
-  Chart.js text scales with the root font (was fixed 11 px); heat/chart/workers/side split 6/6 so FIX tables
-  don't wrap; empty search-map text no longer wraps one word per line (all modes). `?presenter=1|0` in the URL
-  forces the mode; `demo.sh` opens `/?presenter=1#bruteforce` (`PRESENTER=0` for normal mode).
-- ✅ Fix "offline / buttons do nothing" (2026-11-26): user's Chrome sent Start POSTs but never opened `/ws`
-  (no connection reached nginx; page itself came from Chrome's heuristic cache). Now: 3 s WebSocket open
-  timeout → HTTP polling of `/api/state` every 1 s until the socket works (retried every 3 s); refresh right
-  after every button POST; render errors caught so one bad snapshot can't kill updates; live updates start
-  before any other init code; nginx sends `Cache-Control: no-cache` for the page/JS/CSS; P shortcut ignores
-  Ctrl/Alt/Meta (Ctrl+P no longer toggles it). Tested in headless Chrome with a normal and a hung WebSocket.
 - ⬜ Rehearse the demo once end-to-end with the partner
-- ⬜ Check presenter mode on the real classroom projector (resolution unknown; tuned for ≥ 1366 px)
 
 ### Optional (Tier 2, if time allows)
 - ⬜ Class Swarm: browser workers via QR code
@@ -200,9 +188,6 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 | 2026-11-24 | No PDF reports, history only | User doesn't need to submit a report |
 | 2026-11-26 | Removed the classical ciphers attack (#6) | User's request: not needed; 5 attacks left |
-| 2026-11-26 | Presenter mode scales with viewport width (vw clamp), demo.sh opens it by default | Fixed 17 px looked small on 1920 px projectors; presenting is the main use of demo.sh |
-| 2026-11-26 | demo.sh falls back to `up --no-build` when the build fails | Offline, BuildKit can't resolve base image tags on Docker Hub; the images built last time still run |
-| 2026-11-26 | Dashboard falls back to HTTP polling when the WebSocket won't open | A stuck WebSocket in the presenter's browser left the demo "offline" with no visible way to recover |
 | 2026-11-24 | Scaling measured from per-second samples, not per-run averages | New workers take seconds to boot on ¼ core; per-run averages and start-time worker counts were wrong |
 
 ## 7. Notes / gotchas
@@ -240,7 +225,3 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - nginx must re-resolve `coordinator` (Docker DNS `resolver 127.0.0.11`), otherwise rebuilding
   the coordinator gives 502 errors.
 - Ports 8000/8080 are in use on the dev machine, so the dashboard runs on **8090**.
-- **Offline check (2026-11-26):** no CDN/external URLs in the dashboard or services. The exact base tags
-  (`python:3.12-slim`, `nginxinc/nginx-unprivileged:1.31-alpine-slim`) must be in the local image store
-  (`docker pull` them while online) or `--build` fails offline. `k8s-up.sh` downloads KEDA from GitHub,
-  so the Kubernetes demo still needs internet the first time.

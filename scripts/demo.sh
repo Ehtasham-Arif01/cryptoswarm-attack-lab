@@ -5,15 +5,11 @@
 #   ./scripts/demo.sh --check    same, then run every attack once end-to-end first (~2 min)
 #   ./scripts/demo.sh --stop     stop everything
 #
-# The dashboard opens in presenter mode (large text for the projector).
-# PRESENTER=0 opens it in normal mode, NO_BROWSER=1 doesn't open a browser at all.
-#
 # Run it 10 minutes before presenting. See DEMO.md for the run sheet.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 URL="http://localhost:${DASHBOARD_PORT:-8090}"
-if [[ "${PRESENTER:-1}" == "0" ]]; then OPEN_URL="$URL/?presenter=0#bruteforce"; else OPEN_URL="$URL/?presenter=1#bruteforce"; fi
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
 if [[ "${1:-}" == "--stop" ]]; then
@@ -27,11 +23,7 @@ if minikube -p cryptoswarm status >/dev/null 2>&1; then
 fi
 
 step "Building and starting the stack"
-if ! docker compose up -d --build --scale worker=1 --scale worker-rust=0; then
-  # No internet (e.g. venue Wi-Fi down): the build can't reach Docker Hub. Use the images built last time.
-  step "Build failed (offline?). Starting the images that are already built"
-  docker compose up -d --no-build --scale worker=1 --scale worker-rust=0
-fi
+docker compose up -d --build --scale worker=1 --scale worker-rust=0
 
 step "Waiting for the coordinator"
 for _ in $(seq 1 60); do
@@ -53,8 +45,7 @@ curl -fs "$URL/api/benchmark?refresh=true" >/dev/null || true
 
 step "Ready"
 cat <<MSG
-Dashboard:      $OPEN_URL
-                (P or the Presenter button toggles presenter mode; F11 for full screen)
+Dashboard:      $URL      (press P for presenter mode)
 Scale Python:   docker compose up -d --scale worker=8
 Add Rust:       docker compose up -d --scale worker-rust=4
 Kill a worker:  docker kill \$(docker compose ps -q worker | head -1)
@@ -62,4 +53,4 @@ Back to 1:      docker compose up -d --scale worker=1 --scale worker-rust=0
 Run sheet:      DEMO.md
 MSG
 
-[[ -z "${NO_BROWSER:-}" ]] && command -v xdg-open >/dev/null && xdg-open "$OPEN_URL" >/dev/null 2>&1 || true
+[[ -z "${NO_BROWSER:-}" ]] && command -v xdg-open >/dev/null && xdg-open "$URL/#bruteforce" >/dev/null 2>&1 || true

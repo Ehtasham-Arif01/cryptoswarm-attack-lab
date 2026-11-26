@@ -15,9 +15,8 @@ cd "/mnt/hdd/Documents/7th-Semester/Information Security/cryptoswarm-attack-lab"
    ./scripts/demo.sh --check
    ```
    All 6 checks must pass. It ends with 1 worker running and the dashboard open.
-3. The dashboard opens in **presenter mode** (text and charts scale with the screen width;
-   **P** or the Presenter button toggles it, `PRESENTER=0 ./scripts/demo.sh` opens normal mode).
-   Press **F11** for full screen. Test on the projector itself: it is tuned for 1366 px and wider.
+3. Press **P** in the dashboard for presenter mode (bigger text). Zoom the browser so the
+   whole Brute Force tab fits the projector.
 4. Keep a terminal open next to the browser, already in the project folder.
 
 ## The run
@@ -60,7 +59,6 @@ and back to 0 about 20 s after the attack ends. Afterwards: `./scripts/k8s-down.
 | Problem | Fix |
 |---|---|
 | Dashboard says *reconnecting* | `docker compose ps`; if the coordinator is down: `docker compose up -d` |
-| Dashboard stuck on *connecting* or buttons do nothing | Close the other CryptoSwarm tabs (each `demo.sh` run opens one), then hard-reload with Ctrl+Shift+R |
 | No workers on the grid | `docker compose up -d --scale worker=4` |
 | An attack seems stuck | Press **Cancel**, start again (each run uses a new random key) |
 | Page looks old after an update | Hard reload: Ctrl+Shift+R |

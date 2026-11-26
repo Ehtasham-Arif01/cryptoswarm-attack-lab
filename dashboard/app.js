@@ -90,9 +90,7 @@ document.querySelectorAll("input[type=range], select").forEach((s) => s.addEvent
 async function post(url, body) {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
   if (!res.ok) console.error(`Request failed: ${res.status}`);
-  const data = await res.json().catch(() => ({}));
-  if (!wsLive) refresh();
-  return data;
+  return res.json().catch(() => ({}));
 }
 function readParams(button) {
   const params = {};
@@ -828,103 +826,38 @@ function renderEvents(events) {
   }).join("");
 }
 
-// ================================================================ live updates
-// WebSocket snapshots, with an HTTP polling fallback: if the socket doesn't open within a few
-// seconds (stuck handshake, proxy, browser limits), the page polls /api/state instead, so the
-// dashboard always stays live. The WebSocket is retried in the background.
-let ws = null;
-let wsLive = false;
-let pollTimer = null;
-
-function safeRender(s) {
-  try { render(s); } catch (err) { console.error("render failed", err); }
-}
-function setConn(state) {
-  const text = { ws: "live", poll: "live", connecting: "connecting…", down: "reconnecting…" }[state];
-  $("conn-dot").className = "dot " + (state === "ws" || state === "poll" ? "on" : "off");
-  $("conn-text").textContent = text;
-  $("conn-text").title = state === "poll" ? "Live over HTTP polling (WebSocket unavailable)" : "";
-}
-async function refresh() {
-  try {
-    const res = await fetch("/api/state", { cache: "no-store" });
-    if (!res.ok) throw new Error(res.status);
-    safeRender(await res.json());
-    if (!wsLive) setConn("poll");
-  } catch {
-    if (!wsLive) setConn("down");
-  }
-}
-function startPolling() {
-  if (!pollTimer) { refresh(); pollTimer = setInterval(refresh, 1000); }
-}
-function stopPolling() {
-  clearInterval(pollTimer);
-  pollTimer = null;
-}
+// ================================================================ websocket
 function connect() {
-  let sock;
-  try {
-    sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
-  } catch (err) {
-    console.error("WebSocket failed", err);
-    startPolling();
-    setTimeout(connect, 5000);
-    return;
-  }
-  ws = sock;
-  const openTimeout = setTimeout(() => { if (sock.readyState !== WebSocket.OPEN) { startPolling(); sock.close(); } }, 3000);
-  sock.onopen = () => { clearTimeout(openTimeout); wsLive = true; stopPolling(); setConn("ws"); };
-  sock.onmessage = (m) => safeRender(JSON.parse(m.data));
-  sock.onclose = () => {
-    clearTimeout(openTimeout);
-    if (ws !== sock) return;
-    wsLive = false;
-    startPolling();
-    setTimeout(connect, 3000);
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.onopen = () => { $("conn-dot").className = "dot on"; $("conn-text").textContent = "live"; };
+  ws.onmessage = (m) => render(JSON.parse(m.data));
+  ws.onclose = () => {
+    $("conn-dot").className = "dot off";
+    $("conn-text").textContent = "reconnecting…";
+    setTimeout(connect, 1000);
   };
 }
-
-// Presenter mode: larger type for the projector (button, the P key or ?presenter=1 in the URL),
-// remembered across reloads. Chart text scales with the page's root font size.
-function fitCharts() {
-  requestAnimationFrame(() => {
-    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
-    Chart.defaults.font.size = Math.round(rootPx * 0.8);
-    Object.values(Chart.instances).forEach((c) => { try { c.resize(); c.update("none"); } catch (err) { console.error(err); } });
-  });
-}
+// Presenter mode: larger type for the projector (button or the P key), remembered across reloads
 function setPresenter(on) {
   document.body.classList.toggle("presenter", on);
   $("presenter").classList.toggle("active", on);
-  try { localStorage.setItem("cs-presenter", on ? "1" : ""); } catch { /* private mode */ }
-  fitCharts();
+  localStorage.setItem("cs-presenter", on ? "1" : "");
+  setTimeout(() => Object.values(Chart.instances).forEach((c) => c.resize()), 50);
 }
-const isPresenter = () => document.body.classList.contains("presenter");
-
-// Start live updates first, so nothing below can stop the dashboard from connecting.
-setConn("connecting");
-connect();
-
-$("presenter").addEventListener("click", () => setPresenter(!isPresenter()));
+$("presenter").addEventListener("click", () => setPresenter(!document.body.classList.contains("presenter")));
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey || (e.key || "").toLowerCase() !== "p") return;
-  if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
-  setPresenter(!isPresenter());
+  if (e.key.toLowerCase() === "p" && !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    setPresenter(!document.body.classList.contains("presenter"));
+  }
 });
-window.addEventListener("resize", fitCharts);
-try {
-  const presenterParam = new URLSearchParams(location.search).get("presenter");
-  let saved = "";
-  try { saved = localStorage.getItem("cs-presenter"); } catch { /* private mode */ }
-  setPresenter(presenterParam !== null ? presenterParam !== "0" : saved === "1");
-} catch (err) { console.error(err); }
+setPresenter(localStorage.getItem("cs-presenter") === "1");
 
 updateSliders();
 // Open a tab straight from the URL, e.g. http://localhost:8090/#cost or #mitm
 const fromHash = location.hash.slice(1);
-if (fromHash && document.querySelector(`.tab[data-tab="${CSS.escape(fromHash)}"]`)) {
+if (document.querySelector(`.tab[data-tab="${CSS.escape(fromHash)}"]`)) {
   autoTabbedJob = "from-url"; // don't jump away to the last job's tab on the first snapshot
   showTab(fromHash);
 }
-document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => history.replaceState(null, "", location.search + "#" + t.dataset.tab)));
+document.querySelectorAll(".tab[data-tab]").forEach((t) => t.addEventListener("click", () => history.replaceState(null, "", "#" + t.dataset.tab)));
+connect();
