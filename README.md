@@ -29,7 +29,7 @@ docker compose down                           # stop everything
 ./scripts/demo.sh --check     # build, start, run every attack once, open the dashboard
 ```
 
-Then follow **[DEMO.md](DEMO.md)**, the minute-by-minute run sheet. Press **P** in the dashboard for presenter mode.
+Then follow **[DEMO.md](DEMO.md)**, the minute-by-minute run sheet. `demo.sh` opens the dashboard in presenter mode; **P** toggles it.
 
 ## Kubernetes (autoscaling)
 

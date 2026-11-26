@@ -15,8 +15,9 @@ cd "/mnt/hdd/Documents/7th-Semester/Information Security/cryptoswarm-attack-lab"
    ./scripts/demo.sh --check
    ```
    All 6 checks must pass. It ends with 1 worker running and the dashboard open.
-3. Press **P** in the dashboard for presenter mode (bigger text). Zoom the browser so the
-   whole Brute Force tab fits the projector.
+3. The dashboard opens in **presenter mode** (text and charts scale with the screen width;
+   **P** or the Presenter button toggles it, `PRESENTER=0 ./scripts/demo.sh` opens normal mode).
+   Press **F11** for full screen. Test on the projector itself: it is tuned for 1366 px and wider.
 4. Keep a terminal open next to the browser, already in the project folder.
 
 ## The run

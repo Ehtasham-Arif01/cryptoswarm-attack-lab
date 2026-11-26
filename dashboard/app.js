@@ -837,12 +837,17 @@ function connect() {
     setTimeout(connect, 1000);
   };
 }
-// Presenter mode: larger type for the projector (button or the P key), remembered across reloads
+// Presenter mode: larger type for the projector (button, the P key or ?presenter=1 in the URL),
+// remembered across reloads. Chart text scales with the page's root font size.
 function setPresenter(on) {
   document.body.classList.toggle("presenter", on);
   $("presenter").classList.toggle("active", on);
   localStorage.setItem("cs-presenter", on ? "1" : "");
-  setTimeout(() => Object.values(Chart.instances).forEach((c) => c.resize()), 50);
+  requestAnimationFrame(() => {
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
+    Chart.defaults.font.size = Math.round(rootPx * 0.8);
+    Object.values(Chart.instances).forEach((c) => { c.resize(); c.update("none"); });
+  });
 }
 $("presenter").addEventListener("click", () => setPresenter(!document.body.classList.contains("presenter")));
 document.addEventListener("keydown", (e) => {
@@ -850,7 +855,9 @@ document.addEventListener("keydown", (e) => {
     setPresenter(!document.body.classList.contains("presenter"));
   }
 });
-setPresenter(localStorage.getItem("cs-presenter") === "1");
+const presenterParam = new URLSearchParams(location.search).get("presenter");
+setPresenter(presenterParam !== null ? presenterParam !== "0" : localStorage.getItem("cs-presenter") === "1");
+window.addEventListener("resize", () => setPresenter(document.body.classList.contains("presenter")));
 
 updateSliders();
 // Open a tab straight from the URL, e.g. http://localhost:8090/#cost or #mitm

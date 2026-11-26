@@ -164,7 +164,13 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   (Ehtasham 1–9, Taha 10–20, other person drives the laptop), and per slide: script, detailed explanation,
   exact demo commands/dashboard inputs/expected result, likely questions. Fault-tolerance kill demo uses a 22-bit run.
 - ⬜ Slides (artifact + `CryptoSwarm-Slides.pptx`) and presenter script PDF still contain the classical-ciphers slides: update them
+- ✅ Presenter mode polish (2026-11-26, checked with headless screenshots at 1366 and 1920 px on every tab):
+  root font = `clamp(16px, 1.15vw, 24px)` so it zooms with the projector width; layout max-width in rem;
+  Chart.js text scales with the root font (was fixed 11 px); heat/chart/workers/side split 6/6 so FIX tables
+  don't wrap; empty search-map text no longer wraps one word per line (all modes). `?presenter=1|0` in the URL
+  forces the mode; `demo.sh` opens `/?presenter=1#bruteforce` (`PRESENTER=0` for normal mode).
 - ⬜ Rehearse the demo once end-to-end with the partner
+- ⬜ Check presenter mode on the real classroom projector (resolution unknown; tuned for ≥ 1366 px)
 
 ### Optional (Tier 2, if time allows)
 - ⬜ Class Swarm: browser workers via QR code
@@ -188,6 +194,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 | 2026-11-24 | No PDF reports, history only | User doesn't need to submit a report |
 | 2026-11-26 | Removed the classical ciphers attack (#6) | User's request: not needed; 5 attacks left |
+| 2026-11-26 | Presenter mode scales with viewport width (vw clamp), demo.sh opens it by default | Fixed 17 px looked small on 1920 px projectors; presenting is the main use of demo.sh |
 | 2026-11-24 | Scaling measured from per-second samples, not per-run averages | New workers take seconds to boot on ¼ core; per-run averages and start-time worker counts were wrong |
 
 ## 7. Notes / gotchas
