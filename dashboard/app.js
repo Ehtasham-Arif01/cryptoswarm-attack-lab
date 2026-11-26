@@ -82,10 +82,6 @@ function updateSliders() {
   $("bd-space").textContent = fmtNum(2 ** b);
   $("bd-expected").textContent = fmtNum(Math.sqrt(Math.PI * 2 ** b));
   $("pw-cost-sup").textContent = $("pw-cost").value;
-  const L = Number($("cl-len").value);
-  $("cl-len-sup").textContent = L;
-  $("cl-space").textContent = fmtNum(26 ** L);
-  $("cl-len-row").classList.toggle("hidden", $("cl-cipher").value !== "vigenere");
   $("pw-cost-row").classList.toggle("hidden", $("pw-scheme").value !== "bcrypt");
   if (lastState) render(lastState);
 }
@@ -366,20 +362,6 @@ const ATTACK_UI = {
     result: (job) => oracleSummary(job),
     complete: (job) => oracleSummary(job),
   },
-  classical: {
-    triedLabel: "Letters analysed",
-    statusLabel: { exhausted: "complete" },
-    extra: (job) => {
-      const st = classicalState(job);
-      return ["Key length · columns", st.length ? `${st.length} · ${Object.keys(st.cols).length}/${st.length}` : "…"];
-    },
-    meta: (m) => `
-      <dt>Cipher</dt><dd>${{ caesar: "Caesar", vigenere: "Vigenère", otp: "one-time pad" }[m.cipher]}</dd>
-      <dt>Ciphertext</dt><dd>${m.n} letters · ${esc(m.ciphertext.slice(0, 40))}…</dd>
-      <dt>Key</dt><dd>unknown to the attacker</dd>`,
-    result: (job) => classicalSummary(job),
-    complete: (job) => classicalSummary(job),
-  },
 };
 
 function oracleBytes(job) {
@@ -427,93 +409,6 @@ function renderOracleGrid(job) {
     const icon = `<span class="po-status ${esc(b.status)}">${{ done: "done", failed: "blocked", working: "working", waiting: "queued" }[b.status] || ""}</span>`;
     return `<div class="po-row ${b.status}"><span class="bl">block ${i + 1}</span><div class="po-cells">${cells}</div><span>${icon}</span></div>`;
   }).join("");
-}
-
-// ---------------------------------------------------------------- classical ciphers
-const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-function classicalState(job) {
-  const iocs = {}, cols = {};
-  for (const [k, v] of Object.entries(job.live)) {
-    if (k.startsWith("len:")) iocs[Number(k.slice(4))] = v.ioc;
-    if (k.startsWith("col:")) cols[Number(k.slice(4))] = v;
-  }
-  const length = Object.values(cols)[0]?.length;
-  const full = length && Object.keys(cols).length === length ? Array.from({ length }, (_, i) => cols[i].letter).join("") : null;
-  const key = full ? shortestPeriod(full) : null; // "ABAB" encrypts exactly like "AB"
-  const plain = key
-    ? [...job.meta.ciphertext].map((c, i) => ABC[(ABC.indexOf(c) - ABC.indexOf(key[i % key.length]) + 26) % 26]).join("")
-    : null;
-  const bestIoc = Math.max(0, ...Object.values(iocs));
-  return { iocs, cols, length, key, plain, bestIoc };
-}
-
-function shortestPeriod(key) {
-  for (let p = 1; p <= key.length; p++) if (key.length % p === 0 && key.slice(0, p).repeat(key.length / p) === key) return key.slice(0, p);
-  return key;
-}
-
-function letterFreq(text) {
-  const counts = Array(26).fill(0);
-  for (const c of text) counts[ABC.indexOf(c)]++;
-  return counts.map((n) => (100 * n) / (text.length || 1));
-}
-
-const iocChart = new Chart($("ioc-chart"), {
-  type: "bar",
-  data: { labels: Array.from({ length: 16 }, (_, i) => i + 1), datasets: [
-    { label: "Avg IoC of the columns", data: [], backgroundColor: SERIES[0] },
-    { label: "English 0.066", data: [], type: "line", borderColor: INK.secondary, backgroundColor: INK.secondary, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 },
-    { label: "Random 0.038", data: [], type: "line", borderColor: INK.muted, backgroundColor: INK.muted, borderDash: [2, 3], pointRadius: 0, borderWidth: 1.5 },
-  ] },
-  options: { animation: false, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: INK.secondary } } },
-    scales: { x: { ...axis, title: { display: true, text: "key length L", color: INK.muted } }, y: { ...axis, min: 0.03, max: 0.08 } } },
-});
-
-const freqChart = new Chart($("freq-chart"), {
-  type: "bar",
-  data: { labels: [...ABC], datasets: [
-    { label: "Ciphertext", data: [], backgroundColor: SERIES[0] },
-    { label: "Recovered plaintext", data: [], backgroundColor: SERIES[1] },
-    { label: "English", data: [], type: "line", borderColor: INK.primary, backgroundColor: INK.primary, pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
-  ] },
-  options: { animation: false, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: INK.secondary } } },
-    scales: { x: { ...axis, ticks: { ...axis.ticks, maxTicksLimit: 26 } }, y: { ...axis, beginAtZero: true, ticks: { ...axis.ticks, callback: (v) => v + "%" } } } },
-});
-
-function renderClassical(job) {
-  if (!job || job.attack !== "classical") return;
-  const st = classicalState(job);
-  iocChart.data.datasets[0].data = Array.from({ length: 16 }, (_, i) => st.iocs[i + 1] ?? null);
-  iocChart.data.datasets[0].backgroundColor = Array.from({ length: 16 }, (_, i) => (i + 1 === st.length && st.bestIoc > 0.05 ? SERIES[1] : SERIES[0]));
-  iocChart.data.datasets[1].data = Array(16).fill(job.meta.english_ioc);
-  iocChart.data.datasets[2].data = Array(16).fill(job.meta.random_ioc);
-  iocChart.update();
-  freqChart.data.datasets[0].data = letterFreq(job.meta.ciphertext);
-  freqChart.data.datasets[1].data = st.plain && st.bestIoc > 0.05 ? letterFreq(st.plain) : [];
-  freqChart.data.datasets[2].data = job.meta.english_freq;
-  freqChart.update();
-}
-
-function classicalSummary(job) {
-  const st = classicalState(job), m = job.meta;
-  const cipherText = `<div class="cipherbox">${esc(m.ciphertext.slice(0, 300))}…</div>`;
-  if (st.bestIoc < 0.05) {
-    return `<h2>${HELD}No pattern to attack: the one-time pad holds</h2>
-      <p class="muted">No key length made the columns look like English (best IoC ${st.bestIoc.toFixed(4)} vs 0.066).
-        The "recovered" text is meaningless: with a one-time pad, every plaintext of this length is equally likely.</p>${cipherText}`;
-  }
-  const real = job.secret && job.secret.key && shortestPeriod(job.secret.key);
-  const keyHtml = [...st.key].map((c, i) => `<span class="${real && real[i] !== c ? "bad" : ""}">${c}</span>`).join("");
-  return `
-    <h2>${BROKEN}${m.cipher === "caesar" ? "Caesar" : "Vigenère"} key recovered in ${fmtDuration(job.elapsed)}, no brute force</h2>
-    <p class="keycmp">key = ${keyHtml}</p>
-    <div class="plaintext">${esc(st.plain.slice(0, 260))}…</div>
-    <p class="muted">Found the key length (${st.length}) from the IoC, then each column with 26 tries:
-      ${st.length * 26} trial decryptions in total. Brute force would face 26<sup>${st.length}</sup> = ${fmtNum(26 ** st.length)} keys.
-      ${real ? verdict(real === st.key, "Matches the real key.", "Differs from the real key " + esc(real) + ".") : ""}</p>
-    <p class="fix-note"><span class="fix-label">Fix</span>A one-time pad (or any modern cipher). Pick "One-time pad" and run again.</p>`;
 }
 
 // ---------------------------------------------------------------- cost to crack
@@ -587,7 +482,7 @@ function renderCost() {
 
 // ---------------------------------------------------------------- history
 const ATTACK_NAMES = { bruteforce: "Brute Force DES", mitm: "Meet-in-the-Middle", birthday: "Birthday Attack",
-  passwords: "Passwords", padding_oracle: "Padding Oracle", classical: "Classical Ciphers" };
+  passwords: "Passwords", padding_oracle: "Padding Oracle" };
 let histRuns = [];
 let lastHistoryJob = null;
 
@@ -763,7 +658,6 @@ function render(s) {
   renderLeak(job);
   renderPwFix(job);
   renderOracleGrid(job);
-  renderClassical(job);
   updateLangRates(s);
   renderLangCompare();
   if (activeTab === "birthday") renderBirthdayChart(job);

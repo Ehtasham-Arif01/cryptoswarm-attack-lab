@@ -1,7 +1,6 @@
 from .base import Attack
 from .birthday import BirthdayAttack
 from .bruteforce import BruteForceDES
-from .classical import ClassicalCiphers
 from .mitm import MeetInTheMiddle
 from .padding_oracle import PaddingOracle
 from .passwords import PasswordCracking
@@ -15,6 +14,5 @@ ATTACKS: dict[str, Attack] = {
         BirthdayAttack(),
         PasswordCracking(),
         PaddingOracle(),
-        ClassicalCiphers(),
     ]
 }

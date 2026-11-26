@@ -14,7 +14,7 @@ cd "/mnt/hdd/Documents/7th-Semester/Information Security/cryptoswarm-attack-lab"
    ```bash
    ./scripts/demo.sh --check
    ```
-   All 7 checks must pass. It ends with 1 worker running and the dashboard open.
+   All 6 checks must pass. It ends with 1 worker running and the dashboard open.
 3. Press **P** in the dashboard for presenter mode (bigger text). Zoom the browser so the
    whole Brute Force tab fits the projector.
 4. Keep a terminal open next to the browser, already in the project folder.
@@ -35,7 +35,6 @@ cd "/mnt/hdd/Documents/7th-Semester/Information Security/cryptoswarm-attack-lab"
 | 7:45 | Passwords: **bcrypt, cost 6** | Only plain-word passwords fall, slowly. "Slow hashing helps; random passwords are never found." |
 | 8:45 | **Padding Oracle**, Vulnerable | Blocks fill right to left, decrypted in **≈ 25 s** with 8 workers. "We never had the key: one leaked bit, padding error or not." |
 | 10:00 | Padding Oracle, **Fixed** | Blocked after 24 queries. "Encrypt-then-MAC: tampered tokens are rejected before decryption." |
-| 10:45 | **Classical Ciphers**, Vigenère, then One-time pad | Key in **< 0.1 s**; IoC chart peaks at the key length. One-time pad: no pattern. |
 | 11:45 | **Cost to crack** | Fleet 1,000 vCPUs: DES ≈ \$20 M with our Python, switch to *GPU cluster* or *Rust*: DES becomes cheap, AES-128 stays impossible. |
 | 12:45 | **History** | Scaling chart from this session's real runs. |
 | 13:15 | GitHub (browser): **Actions** tab | Pipeline: tests, Trivy scans, builds, end-to-end attacks on every push. "Trivy found root containers and 3 vulnerable library versions; the pipeline blocks them." |

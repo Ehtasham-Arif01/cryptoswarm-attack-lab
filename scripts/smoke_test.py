@@ -76,15 +76,6 @@ def check_padding_oracle_fixed(job):
     assert all(b["status"] == "failed" for b in job["live"].values())
 
 
-def shortest_period(key: str) -> str:
-    return next(key[:p] for p in range(1, len(key) + 1) if len(key) % p == 0 and key == key[:p] * (len(key) // p))
-
-
-def check_classical(job):
-    cols = sorted((int(k[4:]), v["letter"]) for k, v in job["live"].items() if k.startswith("col:"))
-    assert shortest_period("".join(c for _, c in cols)) == shortest_period(job["secret"]["key"])
-
-
 CASES = [
     ("bruteforce", {"bits": 16}, check_bruteforce),
     ("mitm", {"bits": 14}, check_mitm),
@@ -92,7 +83,6 @@ CASES = [
     ("passwords", {"scheme": "md5"}, check_passwords),
     ("padding_oracle", {"mode": "vulnerable"}, check_padding_oracle),
     ("padding_oracle", {"mode": "fixed"}, check_padding_oracle_fixed),
-    ("classical", {"cipher": "vigenere", "key_len": 6}, check_classical),
 ]
 
 
