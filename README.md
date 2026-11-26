@@ -70,6 +70,7 @@ Manifests: `k8s/` (non-root pods, dropped capabilities, read-only root filesyste
 | 3 | Birthday attack | Truncated SHA-256 collision in ~√N | Full-length hash | ✅ |
 | 4 | Password cracking | MD5 + rainbow tables | bcrypt + salt | ✅ |
 | 5 | Padding oracle | Decrypt AES-CBC byte by byte | Encrypt-then-MAC | ✅ |
+| 6 | Classical ciphers | Caesar/Vigenère by frequency analysis | One-time pad / modern ciphers | ✅ |
 
 Full roadmap and progress: **[BRAIN.md](BRAIN.md)**.
 

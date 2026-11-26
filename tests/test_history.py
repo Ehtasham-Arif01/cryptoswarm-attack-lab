@@ -26,6 +26,8 @@ def test_every_attack_can_summarize_a_cancelled_job():
     for name, attack in ATTACKS.items():
         if name == "passwords":
             job["meta"] = {"scheme": "md5", "cost": 8, "users": []}
+        elif name == "classical":
+            job["meta"] = {"cipher": "vigenere"}
         elif name == "padding_oracle":
             job["meta"] = {"n_blocks": 6, "mode": "vulnerable"}
         assert isinstance(attack.summarize(job), str)

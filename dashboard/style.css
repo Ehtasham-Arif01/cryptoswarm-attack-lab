@@ -282,6 +282,11 @@ mark.bad { background: var(--critical-bg); color: #ff8a8d; }
 .po-status.failed { color: #ff8a8d; }
 .po-status.working { color: var(--accent-ink); }
 
+/* ------------------------------------------------------------------ classical */
+.keycmp { font-family: var(--mono); font-size: 1.35rem; letter-spacing: 0.3em; margin: 0.3rem 0; }
+.keycmp .bad { color: #ff8a8d; }
+.cipherbox { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); word-break: break-all; max-height: 3.6rem; overflow: hidden; }
+
 /* ------------------------------------------------------------------ python vs rust */
 .lang-compare { display: flex; flex-direction: column; gap: 0.5rem; }
 .lang-row { display: grid; grid-template-columns: 4rem 1fr 6.5rem; gap: 0.7rem; align-items: center; font-size: 0.84rem; color: var(--text-2); }

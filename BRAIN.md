@@ -11,7 +11,8 @@ Legend: ✅ done · 🚧 in progress · ⬜ to do · ❌ dropped
 
 **CryptoSwarm: Distributed Crypto Attack Lab.** A live web dashboard that controls a
 group of Docker/Kubernetes worker containers to break **weakened versions of real crypto**
-(DES, Double DES, truncated hashes, MD5 passwords, AES-CBC via padding oracle). Every attack has a **Break → Fix** toggle that shows the countermeasure.
+(DES, Double DES, truncated hashes, MD5 passwords, AES-CBC via padding oracle, classical
+ciphers). Every attack has a **Break → Fix** toggle that shows the countermeasure.
 Course: Information Security (CS3002), Stallings ch. 1–20. Team: 2 people.
 
 ## 2. Architecture (short)
@@ -84,7 +85,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Dashboard: leaked-table view with "same hash as…" warnings, cracked passwords, fix table using measured speed.
 - ✅ Break→Fix on each attack: brute force ✅ (key-size table), MITM ✅ (3DES table), birthday ✅ (full-hash table), passwords ✅ (salt/bcrypt/strong-password table)
 
-### Week 3: Advanced attacks + platform features (5 attacks; classical ciphers removed 2026-11-26)
+### Week 3: Advanced attacks + platform features (all 6 attacks done 2026-11-24)
 - ✅ Attack 5: Padding oracle on AES-CBC (`swarm/attacks/padding_oracle.py` + `oracle/server.py` container).
   Oracle = vulnerable FastAPI server (key never leaves it): `500 padding error` vs `400`/`200`. Fixed mode =
   Encrypt-then-MAC (HMAC-SHA256 over IV‖C checked first, constant time → always `403`).
@@ -93,12 +94,12 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Live per-block progress in `swarm:job:<id>:live`. Measured (8 workers): vulnerable 6/6 blocks in 24–29 s,
   ~11.7k queries (~122/byte); fixed: blocked after 24 queries.
   Dashboard: live block grid (right to left, padding shown as hex), decrypted token, Encrypt-then-MAC explanation.
-- ❌ Attack 6: Classical ciphers, **removed 2026-11-26** (code, tab, tests, smoke case deleted; was (`swarm/attacks/classical.py`): Caesar / Vigenère (key length 2–10) / one-time pad
+- ✅ Attack 6: Classical ciphers (`swarm/attacks/classical.py`): Caesar / Vigenère (key length 2–10) / one-time pad
   on an original 809-letter text. Phase 1: one chunk per key length 1–16 (average IoC of the columns).
   Phase 2: one chunk per column, Caesar by chi-squared. Key length rule = smallest L with IoC ≥ **95%** of the best (90% failed 5/2,000 on partly repeating keys like UGUK, found by a flaky CI run; 95% + reducing the key to its shortest period: 0/10,000)
   (a fixed 0.055 threshold failed: half of a 10-letter key already scores 0.056). Checked: 300/300 lengths,
   500/500 full keys correct. Swarm runtime ≈ 50–150 ms. OTP: best IoC ≈ 0.040 → "no pattern".
-  Dashboard: IoC-per-length chart (peaks at L, 2L), letter frequency chart (cipher vs recovered vs English), fix table.)
+  Dashboard: IoC-per-length chart (peaks at L, 2L), letter frequency chart (cipher vs recovered vs English), fix table.
 - ⬜ Fault-tolerance demo polish (dead worker tile turns red, requeue shown in event log)
 - ✅ Cost-to-crack tab (`#cost`): `GET /api/benchmark` = 1-core speeds of the workers' own Python code
   (DES, AES-128/256, MD5, SHA-256, bcrypt), cached 10 min, not cached if measured during an attack ("busy").
@@ -122,7 +123,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 - ✅ Autoscaling with **KEDA 2.21.1** (`k8s/keda.yaml`): metrics-api trigger on the coordinator's `/api/scaling`
   (`pending` = queued + in-progress chunks, so busy workers aren't scaled away), target 1 chunk/pod, 0–8 pods,
   poll 2 s, cooldown 20 s. Measured: 0 → 1 pod in 3 s, → 8 pods requested at 16 s, all ready at 30 s (~80 k keys/s);
-  back to 0 within ~30 s after the job. Smoke test passed 7/7 on Kubernetes (6 cases since classical was removed) starting from 0 workers.
+  back to 0 within ~30 s after the job. Smoke test passes 7/7 on Kubernetes starting from 0 workers.
 - ✅ Worker IDs safe for pods: `<deployment>-<pod suffix>` (e.g. `worker-lv9c7`), Python and Rust.
 - ✅ Rust worker (`worker-rust/`, brute-force DES only). Same Redis protocol as the Python worker (reliable queue,
   heartbeat with `lang: "rust"`, progress, FINISH Lua, SIGTERM requeue); hands other attacks' chunks back to the queue.
@@ -135,13 +136,13 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   CI: Rust image built (incl. cargo test), Trivy-scanned, e2e runs with 4 Python + 2 Rust workers, pushed to GHCR.
 - ✅ CI/CD (`.github/workflows/ci.yml`, checked with actionlint): **test** (ruff + pytest + `node --check`),
   **security** (Trivy fs: deps, secrets, Dockerfile misconfig), **e2e** (build → Trivy image scan → stack with
-  4 uncapped workers → `scripts/smoke_test.py` runs all 6 attack cases → on main push images to
+  4 uncapped workers → `scripts/smoke_test.py` runs all 7 attack cases → on main push images to
   `ghcr.io/<owner>/cryptoswarm-attack-lab/{coordinator,worker,oracle}:<sha>|latest`). HIGH/CRITICAL with a fix fails the build.
   Findings fixed while setting it up: containers ran as root (AVD-DS-0002) → `USER app` (uid 10001);
   Starlette 0.41.3 had 3 HIGH CVEs (missed by the fs scan because it's a transitive dep) → FastAPI 0.165 + Starlette 1.10 pinned.
   Smoke test also found 2 bugs: oracle crashed (500) on forged tokens decrypting to non-object JSON; worker marked
   chunks that raised as *done* → now retried up to 3 times (`MAX_ATTEMPTS`).
-  First green run: 2026-11-24 (~3.5 min). E2E on the runner: all cases pass (padding oracle 7 s with 4 uncapped workers).
+  First green run: 2026-11-24 (~3.5 min). E2E on the runner: all 7 cases pass (padding oracle 7 s with 4 uncapped workers).
   GHCR push needed the `org.opencontainers.image.source` label (otherwise `denied`). Packages are private.
   A brand-new package can still be `denied` on its very first push (it gets created + linked anyway); the next run works.
   Actions pinned to current majors (checkout v7, setup-python v7, login-action v4) to avoid the Node 20 deprecation.
@@ -155,15 +156,6 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   (nginx 1.27 had 68). Built, scanned and pushed in CI like the others.
 - ✅ Demo kit: `./scripts/demo.sh [--check|--stop]` and **DEMO.md** (15-minute run sheet with measured timings,
   troubleshooting table, numbers to remember).
-- ✅ Class slides (20 slides, follow DEMO.md order; each attack = "how it works" + "fix" slide with a DEMO cue
-  footer and speaker notes): claude.ai artifact https://claude.ai/artifact/U9gxQ9emq22mhs5ggzEJzG (private).
-  Presenters on cover: Ehtasham Arif 23P-0567, Taha Rizwan 23P-0037.
-  PowerPoint version: `CryptoSwarm-Slides.pptx` in the repo root (same 20 slides + speaker notes, Arial/Calibri
-  so it renders the same on any classroom PC; built with pptxgenjs, not committed yet).
-  Presenter script: `CryptoSwarm-Presenter-Script.pdf` (31 pages): setup checklist, speaker split
-  (Ehtasham 1–9, Taha 10–20, other person drives the laptop), and per slide: script, detailed explanation,
-  exact demo commands/dashboard inputs/expected result, likely questions. Fault-tolerance kill demo uses a 22-bit run.
-- ⬜ Slides (artifact + `CryptoSwarm-Slides.pptx`) and presenter script PDF still contain the classical-ciphers slides: update them
 - ⬜ Rehearse the demo once end-to-end with the partner
 
 ### Optional (Tier 2, if time allows)
@@ -187,7 +179,6 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-24 | MITM 3DES fix shown as a computed table, not a running attack | An attack that can't finish isn't a useful demo; the table shows the times at the swarm's real speed |
 | 2026-11-24 | No Claude co-author lines in commits | User's request |
 | 2026-11-24 | No PDF reports, history only | User doesn't need to submit a report |
-| 2026-11-26 | Removed the classical ciphers attack (#6) | User's request: not needed; 5 attacks left |
 | 2026-11-24 | Scaling measured from per-second samples, not per-run averages | New workers take seconds to boot on ¼ core; per-run averages and start-time worker counts were wrong |
 
 ## 7. Notes / gotchas
