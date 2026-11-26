@@ -60,6 +60,7 @@ and back to 0 about 20 s after the attack ends. Afterwards: `./scripts/k8s-down.
 | Problem | Fix |
 |---|---|
 | Dashboard says *reconnecting* | `docker compose ps`; if the coordinator is down: `docker compose up -d` |
+| Dashboard stuck on *connecting* or buttons do nothing | Close the other CryptoSwarm tabs (each `demo.sh` run opens one), then hard-reload with Ctrl+Shift+R |
 | No workers on the grid | `docker compose up -d --scale worker=4` |
 | An attack seems stuck | Press **Cancel**, start again (each run uses a new random key) |
 | Page looks old after an update | Hard reload: Ctrl+Shift+R |

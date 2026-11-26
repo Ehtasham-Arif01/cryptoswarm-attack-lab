@@ -169,6 +169,12 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
   Chart.js text scales with the root font (was fixed 11 px); heat/chart/workers/side split 6/6 so FIX tables
   don't wrap; empty search-map text no longer wraps one word per line (all modes). `?presenter=1|0` in the URL
   forces the mode; `demo.sh` opens `/?presenter=1#bruteforce` (`PRESENTER=0` for normal mode).
+- ✅ Fix "offline / buttons do nothing" (2026-11-26): user's Chrome sent Start POSTs but never opened `/ws`
+  (no connection reached nginx; page itself came from Chrome's heuristic cache). Now: 3 s WebSocket open
+  timeout → HTTP polling of `/api/state` every 1 s until the socket works (retried every 3 s); refresh right
+  after every button POST; render errors caught so one bad snapshot can't kill updates; live updates start
+  before any other init code; nginx sends `Cache-Control: no-cache` for the page/JS/CSS; P shortcut ignores
+  Ctrl/Alt/Meta (Ctrl+P no longer toggles it). Tested in headless Chrome with a normal and a hung WebSocket.
 - ⬜ Rehearse the demo once end-to-end with the partner
 - ⬜ Check presenter mode on the real classroom projector (resolution unknown; tuned for ≥ 1366 px)
 
@@ -196,6 +202,7 @@ Redis · Docker Compose · Kubernetes (kind/minikube + HPA) · GitHub Actions + 
 | 2026-11-26 | Removed the classical ciphers attack (#6) | User's request: not needed; 5 attacks left |
 | 2026-11-26 | Presenter mode scales with viewport width (vw clamp), demo.sh opens it by default | Fixed 17 px looked small on 1920 px projectors; presenting is the main use of demo.sh |
 | 2026-11-26 | demo.sh falls back to `up --no-build` when the build fails | Offline, BuildKit can't resolve base image tags on Docker Hub; the images built last time still run |
+| 2026-11-26 | Dashboard falls back to HTTP polling when the WebSocket won't open | A stuck WebSocket in the presenter's browser left the demo "offline" with no visible way to recover |
 | 2026-11-24 | Scaling measured from per-second samples, not per-run averages | New workers take seconds to boot on ¼ core; per-run averages and start-time worker counts were wrong |
 
 ## 7. Notes / gotchas

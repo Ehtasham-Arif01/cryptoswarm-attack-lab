@@ -23,6 +23,11 @@ server {
         proxy_read_timeout 3600s;
     }
 
+    # Always revalidate the page and its code, so a browser never runs a stale app.js after an update.
+    location / {
+        add_header Cache-Control "no-cache";
+    }
+
     location /fonts/ {
         add_header Cache-Control "public, max-age=604800";
     }
