@@ -97,13 +97,27 @@ Developed for the **Information Security (CS3002)** course, based on William Sta
 
 ```mermaid
 flowchart LR
-    UI["Dashboard<br/>nginx + JavaScript + Chart.js"] <-->|"WebSocket / REST"| C["Coordinator<br/>FastAPI"]
-    C <--> R[("Redis<br/>job queue, shared tables,<br/>heartbeats, events")]
-    C --> H[("SQLite<br/>attack history")]
-    R <--> W1["Python worker 1"]
-    R <--> W2["Python worker N"]
-    R <--> RW["Rust worker 1..N"]
-    W1 -.->|"padding oracle only"| O["Oracle<br/>vulnerable AES-CBC server"]
+    UI["Dashboard: nginx, JavaScript, Chart.js"]
+    C["Coordinator: FastAPI"]
+    R[("Redis: queue, tables, heartbeats, events")]
+    H[("SQLite: attack history")]
+    W1["Python worker 1"]
+    W2["Python worker N"]
+    RW["Rust workers"]
+    O["Oracle: vulnerable AES-CBC server"]
+
+    UI -->|WebSocket and REST| C
+    C --> UI
+    C --> R
+    R --> C
+    C --> H
+    R --> W1
+    R --> W2
+    R --> RW
+    W1 --> R
+    W2 --> R
+    RW --> R
+    W1 -.->|padding oracle only| O
     W2 -.-> O
 ```
 
