@@ -7,6 +7,12 @@
 ![Kubernetes](https://img.shields.io/badge/kubernetes-KEDA%20autoscaling-326CE5)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
+<p align="center">
+  <img src="docs/screenshots/bruteforce.png" alt="CryptoSwarm dashboard: ten Python and Rust workers brute-forcing a DES key live" width="100%">
+  <br>
+  <em>Live brute-force DES attack: 10 workers (8 Python, 2 Rust) searching a 2<sup>27</sup> keyspace at around 780k keys/s.</em>
+</p>
+
 **CryptoSwarm** is a distributed, fault-tolerant compute platform that breaks deliberately weakened
 versions of real-world cryptography in real time, and then demonstrates the countermeasure that
 defeats each attack. A coordinator splits every attack into work units, a horizontally scalable swarm of
@@ -24,6 +30,7 @@ Developed for the **Information Security (CS3002)** course, based on William Sta
 ## Table of contents
 
 - [Highlights](#highlights)
+- [Screenshots](#screenshots)
 - [Attack modules](#attack-modules)
 - [Architecture](#architecture)
 - [The Rust worker](#the-rust-worker)
@@ -59,6 +66,50 @@ Developed for the **Information Security (CS3002)** course, based on William Sta
   scans dependencies, secrets, Dockerfiles and built images with Trivy, runs every attack end-to-end,
   and publishes images to GitHub Container Registry.
 - **Fully offline:** all JavaScript libraries and fonts are vendored, so the lab runs without internet access.
+
+---
+
+## Screenshots
+
+All screenshots are taken from real runs of the lab on a single 2-core laptop.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/mitm.png" alt="Meet-in-the-middle: both Double DES keys recovered in 8.7 s"><br>
+      <sub><b>Meet-in-the-middle: both Double DES keys recovered in 8.7 s</b></sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/birthday.png" alt="Birthday attack: two contracts, one truncated SHA-256 hash"><br>
+      <sub><b>Birthday attack: two contracts, one truncated SHA-256 hash</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/passwords.png" alt="Password cracking: 9 of 12 MD5 accounts in 265 ms"><br>
+      <sub><b>Password cracking: 9 of 12 MD5 accounts in 265 ms</b></sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/padding-oracle.png" alt="Padding oracle: AES-CBC token decrypted without the key"><br>
+      <sub><b>Padding oracle: AES-CBC token decrypted without the key</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/classical.png" alt="Classical ciphers: Vigenere key recovered by frequency analysis"><br>
+      <sub><b>Classical ciphers: Vigenere key recovered by frequency analysis</b></sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/cost.png" alt="Cost to crack: cloud cost of DES vs AES at measured speed"><br>
+      <sub><b>Cost to crack: cloud cost of DES vs AES at measured speed</b></sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/history.png" alt="Attack history and measured scaling chart" width="100%"><br>
+  <sub><b>Attack history: every run is persisted, with a scaling chart built from measured worker throughput</b></sub>
+</p>
 
 ---
 
