@@ -8,3 +8,4 @@ __pycache__/
 .idea/
 .vscode/
 worker-rust/target/
+.ruff_cache/

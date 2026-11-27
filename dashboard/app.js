@@ -40,7 +40,7 @@ const timeCell = (secs) => {
   return `<td class="${danger ? "safe" : ""}">${fmtDuration(secs)}</td>`;
 };
 
-// Validated dark-mode categorical palette (fixed order; see dataviz palette check in BRAIN.md).
+// Dark-mode categorical palette, contrast-checked against the surface colour (fixed order).
 const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9", "#e66767"];
 const INK = { primary: "#eceef2", secondary: "#a7adba", muted: "#7c8394", grid: "#23262e", surface: "#16181d" };
 const workerSlot = new Map(); // worker id -> palette slot, in the order workers first appear

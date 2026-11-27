@@ -4,7 +4,7 @@
 #   security  Trivy scan of the repo: vulnerable dependencies, leaked secrets, Dockerfile misconfigurations
 #   e2e       build images (incl. Rust worker + cargo test) → Trivy image scan → start the stack
 #             with Python + Rust workers → run every attack end-to-end
-#             → on main: push images to GitHub Container Registry (private, like the repo)
+#             → on main: push images to GitHub Container Registry
 #
 # A HIGH or CRITICAL finding that has a fix available fails the pipeline.
 
@@ -125,5 +125,5 @@ jobs:
             docker tag "$REGISTRY/$svc:$TAG" "$REGISTRY/$svc:latest"
             docker push "$REGISTRY/$svc:latest"
           done
-          echo "### 📦 Images pushed" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Images pushed" >> "$GITHUB_STEP_SUMMARY"
           for svc in coordinator worker worker-rust oracle dashboard; do echo "- \`$REGISTRY/$svc:$TAG\`" >> "$GITHUB_STEP_SUMMARY"; done

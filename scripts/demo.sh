@@ -5,7 +5,7 @@
 #   ./scripts/demo.sh --check    same, then run every attack once end-to-end first (~2 min)
 #   ./scripts/demo.sh --stop     stop everything
 #
-# Run it 10 minutes before presenting. See DEMO.md for the run sheet.
+# Run it a few minutes before presenting.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -50,7 +50,6 @@ Scale Python:   docker compose up -d --scale worker=8
 Add Rust:       docker compose up -d --scale worker-rust=4
 Kill a worker:  docker kill \$(docker compose ps -q worker | head -1)
 Back to 1:      docker compose up -d --scale worker=1 --scale worker-rust=0
-Run sheet:      DEMO.md
 MSG
 
 [[ -z "${NO_BROWSER:-}" ]] && command -v xdg-open >/dev/null && xdg-open "$URL/#bruteforce" >/dev/null 2>&1 || true
