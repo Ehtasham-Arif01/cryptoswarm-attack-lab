@@ -7,6 +7,7 @@
 ![Kubernetes](https://img.shields.io/badge/kubernetes-KEDA%20autoscaling-326CE5)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
+
 <p align="center">
   <img src="docs/screenshots/bruteforce.png" alt="CryptoSwarm dashboard: ten Python and Rust workers brute-forcing a DES key live" width="100%">
   <br>
