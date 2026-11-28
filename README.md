@@ -397,3 +397,5 @@ project against systems you do not own or are not authorised to test.
 ## License
 
 Released under the [MIT License](LICENSE).
+
+Contributions are welcome: open an issue or a pull request with your idea, fix or new attack module.
