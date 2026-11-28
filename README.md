@@ -247,6 +247,28 @@ docker compose up -d --build
 
 Open the dashboard at **http://localhost:8090** (override with `DASHBOARD_PORT`).
 
+### Run with prebuilt images (no local build)
+
+CI publishes every image to GitHub Container Registry on each push to `main`, tagged `latest`
+and with the commit SHA. The images are public, so no login is needed.
+
+```bash
+export REGISTRY=ghcr.io/ehtasham-arif01/cryptoswarm-attack-lab
+export TAG=latest            # or a specific commit SHA
+docker compose pull
+docker compose up -d --no-build
+```
+
+Individual images can also be pulled directly:
+
+```bash
+docker pull ghcr.io/ehtasham-arif01/cryptoswarm-attack-lab/coordinator:latest
+docker pull ghcr.io/ehtasham-arif01/cryptoswarm-attack-lab/worker:latest
+docker pull ghcr.io/ehtasham-arif01/cryptoswarm-attack-lab/worker-rust:latest
+docker pull ghcr.io/ehtasham-arif01/cryptoswarm-attack-lab/oracle:latest
+docker pull ghcr.io/ehtasham-arif01/cryptoswarm-attack-lab/dashboard:latest
+```
+
 ### Operating the swarm
 
 ```bash
